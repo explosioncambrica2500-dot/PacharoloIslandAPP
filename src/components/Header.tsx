@@ -8,7 +8,6 @@ import {
   Zap,
   CheckCircle2,
   AlertTriangle,
-  Terminal,
   Wallet,
   Smartphone,
 } from "lucide-react";
@@ -30,7 +29,6 @@ interface HeaderProps {
   browserNotificationsEnabled: boolean;
   onRequestBrowserNotification: () => void;
   apiError: string | null;
-  onOpenPythonModal: () => void;
   walletConfig: WalletConfig;
   onOpenWalletModal: () => void;
   onOpenAndroidModal: () => void;
@@ -52,7 +50,6 @@ export const Header: React.FC<HeaderProps> = ({
   browserNotificationsEnabled,
   onRequestBrowserNotification,
   apiError,
-  onOpenPythonModal,
   walletConfig,
   onOpenWalletModal,
   onOpenAndroidModal,
@@ -202,26 +199,15 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {/* Python Script Trigger */}
-          <button
-            id="open-python-modal-button"
-            onClick={onOpenPythonModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 text-xs font-semibold transition-colors"
-            title="Ver y descargar script en Python"
-          >
-            <Terminal className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="hidden sm:inline">Script Python</span>
-          </button>
-
-          {/* Android / APK Modal Trigger */}
+          {/* Descargar para Android Trigger */}
           <button
             id="open-android-apk-button"
             onClick={onOpenAndroidModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors shadow-sm"
-            title="Instalar en Android o descargar paquete APK"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition-colors shadow-sm"
+            title="Descargar e instalar en Android"
           >
             <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Android / APK</span>
+            <span>Descargar para Android</span>
           </button>
 
           {/* Alert Panel Trigger */}

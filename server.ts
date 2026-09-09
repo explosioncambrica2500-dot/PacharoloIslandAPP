@@ -415,22 +415,6 @@ async function startServer() {
     });
   });
 
-  // 5. API route: Download or view Python Script
-  app.get("/api/python-script", (req, res) => {
-    const filePath = path.join(process.cwd(), "jupiter_dex_monitor.py");
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).send("# Script file not found");
-    }
-    const content = fs.readFileSync(filePath, "utf-8");
-    if (req.query.download === "true") {
-      res.setHeader("Content-Disposition", 'attachment; filename="jupiter_dex_monitor.py"');
-      res.setHeader("Content-Type", "text/x-python; charset=utf-8");
-    } else {
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    }
-    res.send(content);
-  });
-
   // Explicit endpoints for manifest.json, manifest.webmanifest and sw.js
   const handleManifest = (req: express.Request, res: express.Response) => {
     const manifestPath = path.join(process.cwd(), "public", "manifest.json");
@@ -456,20 +440,8 @@ async function startServer() {
     res.sendFile(swPath);
   });
 
-  // Serve static files from /public directory (PWA assets, zip, icons)
+  // Serve static files from /public directory (PWA assets, icons)
   app.use(express.static(path.join(process.cwd(), "public")));
-
-  // Dedicated endpoint for downloading the complete Android Studio / APK ready project
-  app.get("/api/download-android-project", (req, res) => {
-    const primaryZip = path.join(process.cwd(), "public", "pacharolo-island-app-android-project.zip");
-    const fallbackZip = path.join(process.cwd(), "public", "jupiter-dex-android-project.zip");
-    const zipPath = fs.existsSync(primaryZip) ? primaryZip : fallbackZip;
-    if (fs.existsSync(zipPath)) {
-      res.download(zipPath, "pacharolo-island-app-android-project.zip");
-    } else {
-      res.status(404).json({ error: "Android project archive not found" });
-    }
-  });
 
   // Vite middleware setup
   if (process.env.NODE_ENV !== "production") {

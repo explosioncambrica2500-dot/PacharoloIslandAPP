@@ -13,7 +13,6 @@ import { PriceChart } from "./components/PriceChart";
 import { AlertManager } from "./components/AlertManager";
 import { TransactionHistory } from "./components/TransactionHistory";
 import { NotificationToast } from "./components/NotificationToast";
-import { PythonScriptModal } from "./components/PythonScriptModal";
 import { RotationStrategyPanel } from "./components/RotationStrategyPanel";
 import { WalletModal } from "./components/WalletModal";
 import { AndroidApkModal } from "./components/AndroidApkModal";
@@ -148,7 +147,6 @@ export default function App() {
 
   const [activeToasts, setActiveToasts] = useState<TriggeredAlertNotification[]>([]);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
-  const [isPythonModalOpen, setIsPythonModalOpen] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
   const [alertModalSymbol, setAlertModalSymbol] = useState<CryptoSymbol>("SOL");
@@ -500,7 +498,6 @@ export default function App() {
         browserNotificationsEnabled={browserNotificationsEnabled}
         onRequestBrowserNotification={requestBrowserNotification}
         apiError={apiError}
-        onOpenPythonModal={() => setIsPythonModalOpen(true)}
         walletConfig={walletConfig}
         onOpenWalletModal={() => setIsWalletModalOpen(true)}
         onOpenAndroidModal={() => setIsAndroidModalOpen(true)}
@@ -615,12 +612,6 @@ export default function App() {
       <NotificationToast
         notifications={activeToasts}
         onDismiss={(id) => setActiveToasts((prev) => prev.filter((t) => t.id !== id))}
-      />
-
-      {/* Python Script Viewer & Downloader Modal */}
-      <PythonScriptModal
-        isOpen={isPythonModalOpen}
-        onClose={() => setIsPythonModalOpen(false)}
       />
 
       {/* Wallet Solana Configuration Modal */}
