@@ -1,0 +1,6 @@
+{
+  "name": "Jupiter DEX Crypto Price Monitor",
+  "description": "Monitor de cotizaciones en tiempo real para BTC, ETH, SOL, ZEC y HYPE mediante Jupiter DEX API con alertas, gráficas interactivas y exportación CSV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

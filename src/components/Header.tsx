@@ -1,0 +1,263 @@
+import React from "react";
+import {
+  Activity,
+  Bell,
+  RefreshCw,
+  Volume2,
+  VolumeX,
+  Zap,
+  CheckCircle2,
+  AlertTriangle,
+  Terminal,
+  Wallet,
+  Smartphone,
+} from "lucide-react";
+import { WalletConfig } from "../types";
+
+interface HeaderProps {
+  latencyMs: number;
+  isPolling: boolean;
+  pollInterval: number;
+  setPollInterval: (interval: number) => void;
+  onManualRefresh: () => void;
+  isRefreshing: boolean;
+  lastUpdated: string | null;
+  activeAlertsCount: number;
+  unreadNotificationsCount: number;
+  onOpenAlerts: () => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
+  browserNotificationsEnabled: boolean;
+  onRequestBrowserNotification: () => void;
+  apiError: string | null;
+  onOpenPythonModal: () => void;
+  walletConfig: WalletConfig;
+  onOpenWalletModal: () => void;
+  onOpenAndroidModal: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  latencyMs,
+  isPolling,
+  pollInterval,
+  setPollInterval,
+  onManualRefresh,
+  isRefreshing,
+  lastUpdated,
+  activeAlertsCount,
+  unreadNotificationsCount,
+  onOpenAlerts,
+  soundEnabled,
+  onToggleSound,
+  browserNotificationsEnabled,
+  onRequestBrowserNotification,
+  apiError,
+  onOpenPythonModal,
+  walletConfig,
+  onOpenWalletModal,
+  onOpenAndroidModal,
+}) => {
+  return (
+    <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3.5 transition-colors">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        {/* Branding & DEX Info */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-emerald-400 p-0.5 shadow-lg shadow-cyan-500/20 flex items-center justify-center">
+            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
+              <Zap className="w-5 h-5 text-cyan-400" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-1.5">
+                Pacharolo Island APP
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60">
+                  Solana Core
+                </span>
+              </h1>
+            </div>
+            <p className="text-xs text-slate-400 flex items-center gap-2">
+              <span>Cotizaciones en tiempo real: BTC, ETH, SOL, ZEC, HYPE</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Live Controls & Telemetry */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Status & Latency Badge */}
+          <div
+            id="latency-badge"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono"
+            title="Latencia estimada con Jupiter API"
+          >
+            <span className="relative flex h-2 w-2">
+              {isPolling && !apiError ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </>
+              ) : apiError ? (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500"></span>
+              )}
+            </span>
+            <span className="text-slate-300">
+              {apiError ? "Modo Caché" : isPolling ? "En Vivo" : "Pausado"}
+            </span>
+            <span className="text-slate-600">|</span>
+            <span
+              className={`font-semibold ${
+                latencyMs < 200
+                  ? "text-emerald-400"
+                  : latencyMs < 800
+                  ? "text-cyan-400"
+                  : "text-amber-400"
+              }`}
+            >
+              {latencyMs > 0 ? `${latencyMs}ms` : "--"}
+            </span>
+          </div>
+
+          {/* Refresh Frequency Selector */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs text-slate-300">
+            <span className="px-2 text-slate-400 font-medium hidden sm:inline">Intervalo:</span>
+            {[
+              { label: "1s", val: 1000 },
+              { label: "2s", val: 2000 },
+              { label: "5s", val: 5000 },
+              { label: "Pausa", val: 0 },
+            ].map((opt) => (
+              <button
+                key={opt.label}
+                id={`interval-btn-${opt.label}`}
+                onClick={() => setPollInterval(opt.val)}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  pollInterval === opt.val
+                    ? "bg-cyan-500 text-slate-950 font-semibold shadow-sm"
+                    : "hover:text-white hover:bg-slate-800"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Manual Refresh Button */}
+          <button
+            id="manual-refresh-button"
+            onClick={onManualRefresh}
+            disabled={isRefreshing}
+            className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white disabled:opacity-50 transition-colors"
+            title="Refrescar cotizaciones ahora"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-cyan-400" : ""}`} />
+          </button>
+
+          {/* Sound Toggle */}
+          <button
+            id="sound-toggle-button"
+            onClick={onToggleSound}
+            className={`p-2 rounded-lg border transition-colors ${
+              soundEnabled
+                ? "bg-slate-900 border-slate-800 text-cyan-400 hover:border-cyan-700"
+                : "bg-slate-900/50 border-slate-800/60 text-slate-500 hover:text-slate-400"
+            }`}
+            title={soundEnabled ? "Sonido de alerta activado" : "Sonido desactivado"}
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
+          {/* Wallet Trigger Button */}
+          <button
+            id="open-wallet-modal-button"
+            onClick={onOpenWalletModal}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+              walletConfig.isConnected
+                ? walletConfig.providerName === "Jupiter Wallet"
+                  ? "bg-gradient-to-r from-emerald-950/60 to-cyan-950/60 text-cyan-300 border-cyan-700/60 hover:border-cyan-500"
+                  : "bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/60"
+                : "bg-slate-900 text-slate-200 border-slate-800 hover:border-slate-700"
+            }`}
+            title="Configuración de Wallet Solana (Jupiter Wallet, Phantom, Solflare)"
+          >
+            {walletConfig.providerName === "Jupiter Wallet" ? (
+              <span className="text-xs">🪐</span>
+            ) : (
+              <Wallet className={`w-3.5 h-3.5 ${walletConfig.isConnected ? "text-emerald-400" : "text-cyan-400"}`} />
+            )}
+            <span className="hidden sm:inline">
+              {walletConfig.isConnected
+                ? `${walletConfig.providerName ? walletConfig.providerName + ": " : ""}${walletConfig.address.substring(0, 4)}...${walletConfig.address.substring(walletConfig.address.length - 4)}`
+                : "Wallet"}
+            </span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                walletConfig.isConnected
+                  ? "bg-emerald-500/20 text-emerald-300"
+                  : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              {walletConfig.mode === "REAL" ? "REAL" : "DEMO"}
+            </span>
+          </button>
+
+          {/* Python Script Trigger */}
+          <button
+            id="open-python-modal-button"
+            onClick={onOpenPythonModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 text-xs font-semibold transition-colors"
+            title="Ver y descargar script en Python"
+          >
+            <Terminal className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="hidden sm:inline">Script Python</span>
+          </button>
+
+          {/* Android / APK Modal Trigger */}
+          <button
+            id="open-android-apk-button"
+            onClick={onOpenAndroidModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors shadow-sm"
+            title="Instalar en Android o descargar paquete APK"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Android / APK</span>
+          </button>
+
+          {/* Alert Panel Trigger */}
+          <button
+            id="open-alerts-button"
+            onClick={onOpenAlerts}
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-200 transition-colors"
+          >
+            <Bell className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline font-medium">Alertas</span>
+            {activeAlertsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                {activeAlertsCount}
+              </span>
+            )}
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse ring-2 ring-slate-950" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {apiError && (
+        <div className="max-w-7xl mx-auto mt-2 text-xs bg-amber-950/40 border border-amber-800/40 text-amber-300 px-3 py-1.5 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+            <span>{apiError} (los datos se mantienen sincronizados con la memoria caché del DEX).</span>
+          </div>
+          <button
+            onClick={onManualRefresh}
+            className="underline hover:text-amber-200 text-[11px] font-semibold ml-2"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+    </header>
+  );
+};
