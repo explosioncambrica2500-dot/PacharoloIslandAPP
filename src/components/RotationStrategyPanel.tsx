@@ -27,7 +27,14 @@ import {
   Check,
 } from "lucide-react";
 import { soundEngine } from "../utils/audio";
-import { WalletConfig } from "../types";
+import { WalletConfig, PlatformFeeConfig } from "../types";
+import { AutonomousBotWalletCard } from "./AutonomousBotWalletCard";
+import {
+  executeAutonomousSwap,
+  DEFAULT_FEE_COLLECTOR,
+  BotKeypairData,
+  getOrCreateBotKeypair,
+} from "../utils/solanaBot";
 
 interface RotationStrategyPanelProps {
   tokens: Record<CryptoSymbol, TokenPriceData>;
@@ -44,6 +51,53 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
   walletConfig,
   onOpenWalletModal,
 }) => {
+  // Autonomous Sub-Wallet & Platform Fee state
+  const [botKeypair, setBotKeypair] = useState<BotKeypairData>(() => getOrCreateBotKeypair());
+  const [isLiveOnChain, setIsLiveOnChain] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("pacharolo_live_onchain") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const [platformFeeConfig, setPlatformFeeConfig] = useState<PlatformFeeConfig>(() => {
+    try {
+      const saved = localStorage.getItem("pacharolo_platform_fee_config");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.feeCollectorAddress && !parsed.feeCollectorAddress.startsWith("PacharoLoFee")) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read platform fee config:", e);
+    }
+    return {
+      feeCollectorAddress: DEFAULT_FEE_COLLECTOR,
+      platformFeeBps: 20, // 0.20%
+      totalFeesCollectedUsd: 0,
+      totalSwapsMonetized: 0,
+    };
+  });
+
+  const handleUpdateFeeConfig = (newCfg: PlatformFeeConfig) => {
+    setPlatformFeeConfig(newCfg);
+    try {
+      localStorage.setItem("pacharolo_platform_fee_config", JSON.stringify(newCfg));
+    } catch (e) {
+      console.warn("Could not save fee config:", e);
+    }
+  };
+
+  const handleChangeLiveMode = (isLive: boolean) => {
+    setIsLiveOnChain(isLive);
+    try {
+      localStorage.setItem("pacharolo_live_onchain", isLive ? "true" : "false");
+    } catch (e) {
+      console.warn("Could not save live mode:", e);
+    }
+  };
   // Strategy state
   const [strategyState, setStrategyState] = useState<RotationStrategyState>(() => {
     return {
@@ -68,6 +122,8 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
   const [manualHoldingInput, setManualHoldingInput] = useState<string>("");
   const [isExecuting, setIsExecuting] = useState(false);
   const [lastActionMessage, setLastActionMessage] = useState<string | null>(null);
+  const [selectedSourceToken, setSelectedSourceToken] = useState<CryptoSymbol | null>(null);
+  const [selectedTargetToken, setSelectedTargetToken] = useState<CryptoSymbol | null>(null);
 
   // 1. Calculate and rank all 5 tokens by priceChange24h (percentage of change)
   const ranking: TokenRankingItem[] = (
@@ -93,17 +149,41 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
       isLowest: idx === arr.length - 1,
     }));
 
-  const leastDropToken = ranking[0]; // "La que ha bajado menos / subido más" (mayor % relativo / más cara)
-  const cheapestToken = ranking[ranking.length - 1]; // "La que más porcentaje de cambio a la baja tiene / la más barata"
+  const leastDropToken = ranking[0] || { symbol: "SOL" as CryptoSymbol, changePercent: 0, usdPrice: 104 };
+  const overallCheapestToken = ranking[ranking.length - 1] || leastDropToken;
+
+  // REGLA FUNDAMENTAL: El token de origen de venta NO PUEDE ser el token de destino de compra.
+  // 1. Origen (Venta): token seleccionado manualmente, o en posesión, o el que menos cayó.
+  const activeSwapFrom: CryptoSymbol =
+    selectedSourceToken || strategyState.currentHoldingToken || leastDropToken.symbol;
+
+  // 2. Destino (Compra): Candidatos filtrados estrictamente para EXCLUIR el token de origen.
+  const destinationCandidates = ranking.filter((t) => t.symbol !== activeSwapFrom);
+
+  // La moneda óptima de destino es la de mayor caída (más barata) entre los tokens restantes:
+  const autoBestDestination = destinationCandidates.length > 0
+    ? destinationCandidates[destinationCandidates.length - 1]
+    : ranking.find((t) => t.symbol !== activeSwapFrom) || { symbol: "BTC" as CryptoSymbol, changePercent: 0, usdPrice: 79000 };
+
+  // El token de destino activo nunca puede ser igual al de origen:
+  const activeSwapTo: CryptoSymbol =
+    selectedTargetToken && selectedTargetToken !== activeSwapFrom
+      ? selectedTargetToken
+      : autoBestDestination.symbol;
+
+  const cheapestToken = overallCheapestToken;
   const spreadPercent = leastDropToken && cheapestToken ? leastDropToken.changePercent - cheapestToken.changePercent : 0;
 
   // Helper to calculate exact swap operation costs, net gain and +0.5% threshold condition
   const calculateSwapMetrics = (fromSymbol: CryptoSymbol, toSymbol: CryptoSymbol) => {
+    // Protección estricta: origen y destino no pueden ser iguales
+    if (fromSymbol === toSymbol) return null;
+
     const fromToken = tokens[fromSymbol];
     const toToken = tokens[toSymbol];
     if (!fromToken || !toToken) return null;
 
-    const sourceAmount = strategyState.currentHoldingAmount > 0
+    const sourceAmount = strategyState.currentHoldingAmount > 0 && strategyState.currentHoldingToken === fromSymbol
       ? strategyState.currentHoldingAmount
       : Number((initialCapitalUsd / fromToken.usdPrice).toFixed(4));
 
@@ -152,9 +232,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
     };
   };
 
-  // Active projection for the current proposed swap
-  const activeSwapFrom = strategyState.currentHoldingToken || leastDropToken?.symbol || "SOL";
-  const activeSwapTo = cheapestToken?.symbol || "SOL";
+  // Active projection for the current proposed swap (Origen y Destino siempre distintos)
   const activeMetrics = calculateSwapMetrics(activeSwapFrom, activeSwapTo);
 
   // Handle Step 1: Initial Purchase of the token with the highest drop percentage (the cheapest token)
@@ -202,14 +280,14 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
     setTimeout(() => setIsExecuting(false), 400);
   };
 
-  // Handle Step 2: Swap from the token that dropped least (or current holding) to the one that dropped most
+  // Handle Step 2: Swap from the source token to the target token (STRICTLY DIFFERENT)
   // STRICT RULE: Only execute if net gain is >= minNetGainThreshold (default 0.5%) after deducting costs
-  const handleRotationSwap = (customSource?: CryptoSymbol, customTarget?: CryptoSymbol) => {
-    const fromSymbol = customSource || strategyState.currentHoldingToken || leastDropToken.symbol;
-    const toSymbol = customTarget || cheapestToken.symbol;
+  const handleRotationSwap = async (customSource?: CryptoSymbol, customTarget?: CryptoSymbol) => {
+    const fromSymbol = customSource || activeSwapFrom;
+    const toSymbol = customTarget || activeSwapTo;
 
     if (fromSymbol === toSymbol) {
-      alert("El token de origen y destino son iguales. No se requiere rotación.");
+      alert("El token de origen de venta no puede ser el mismo que el de destino de compra. Elige dos activos diferentes.");
       return;
     }
 
@@ -228,6 +306,33 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
     setIsExecuting(true);
     soundEngine.playAlertChime("high");
 
+    // Ejecución autónoma (firma desatendida y cobro de Platform Fee de Jupiter)
+    let txHash = `${Math.random().toString(36).substring(2, 7).toUpperCase()}...JUP`;
+    let platformFeeEarnedUsd = (metrics.currentTotalValueUsd * platformFeeConfig.platformFeeBps) / 10000;
+
+    try {
+      const swapResult = await executeAutonomousSwap({
+        fromSymbol,
+        toSymbol,
+        amount: metrics.sourceAmount,
+        sourceUsdPrice: metrics.fromPrice,
+        targetUsdPrice: metrics.toPrice,
+        secretKeyBase58: botKeypair.secretKeyBase58,
+        isLiveOnChain,
+        platformFeeBps: platformFeeConfig.platformFeeBps,
+        feeCollectorAddress: platformFeeConfig.feeCollectorAddress,
+      });
+
+      if (swapResult.txHash) {
+        txHash = swapResult.txHash;
+      }
+      if (swapResult.platformFeeUsd) {
+        platformFeeEarnedUsd = swapResult.platformFeeUsd;
+      }
+    } catch (swapErr) {
+      console.warn("Autonomous swap fallback:", swapErr);
+    }
+
     const now = new Date().toISOString();
 
     const swapTx: DexTransaction = {
@@ -241,13 +346,22 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
       toSymbol: toSymbol,
       toAmount: metrics.targetAmount,
       spreadPercent: Number(metrics.spread.toFixed(2)),
-      txHash: `${Math.random().toString(36).substring(2, 7).toUpperCase()}...JUP`,
-      dex: "Jupiter DEX Router (Solana)",
-      wallet: "Bot (Swap Rotativo)",
+      txHash,
+      dex: isLiveOnChain ? "Jupiter DEX (On-Chain Solana)" : "Jupiter DEX Router (Simulación)",
+      wallet: isLiveOnChain
+        ? `Sub-Wallet (${botKeypair.publicKey.substring(0, 4)}...${botKeypair.publicKey.substring(botKeypair.publicKey.length - 4)})`
+        : "Bot Autónomo (Sub-Wallet)",
       status: "CONFIRMED",
     };
 
     onExecuteSwap(swapTx);
+
+    // Registrar comisiones ganadas para el creador del bot
+    handleUpdateFeeConfig({
+      ...platformFeeConfig,
+      totalFeesCollectedUsd: platformFeeConfig.totalFeesCollectedUsd + platformFeeEarnedUsd,
+      totalSwapsMonetized: platformFeeConfig.totalSwapsMonetized + 1,
+    });
 
     setStrategyState((prev) => ({
       ...prev,
@@ -258,8 +372,12 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
       totalSwapsCount: prev.totalSwapsCount + 1,
     }));
 
+    // Reset custom selection to let next cycle recalculate automatically
+    setSelectedSourceToken(null);
+    setSelectedTargetToken(null);
+
     setLastActionMessage(
-      `✓ Swap ejecutado con éxito en Jupiter DEX: ${metrics.sourceAmount} ${fromSymbol} ➔ ${metrics.targetAmount} ${toSymbol} (Aumento neto del monto total: +${metrics.netGainPercent.toFixed(2)}% | +$${metrics.netGainUsd.toFixed(2)} USD | Costes deducidos: $${metrics.totalCostsUsd.toFixed(2)} USD).`
+      `✓ Swap autónomo completado (${isLiveOnChain ? "On-Chain" : "Simulado"}): ${metrics.sourceAmount} ${fromSymbol} ➔ ${metrics.targetAmount} ${toSymbol} (+${metrics.netGainPercent.toFixed(2)}% neto | Fee plataforma: $${platformFeeEarnedUsd.toFixed(3)} USD). Tx: ${txHash.substring(0, 16)}...`
     );
 
     setTimeout(() => setIsExecuting(false), 400);
@@ -270,8 +388,11 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
     if (!strategyState.autoBotEnabled) return;
 
     const timer = setInterval(() => {
-      const fromSym = strategyState.currentHoldingToken;
-      const toSym = cheapestToken.symbol;
+      const fromSym = strategyState.currentHoldingToken || leastDropToken?.symbol || "SOL";
+      // Filtrar estrictamente candidatos para que el destino NUNCA sea el origen:
+      const validTargets = ranking.filter((t) => t.symbol !== fromSym);
+      if (validTargets.length === 0) return;
+      const toSym = validTargets[validTargets.length - 1].symbol;
 
       if (fromSym !== toSym) {
         const metrics = calculateSwapMetrics(fromSym, toSym);
@@ -283,7 +404,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
     }, 6000);
 
     return () => clearInterval(timer);
-  }, [strategyState.autoBotEnabled, strategyState.currentHoldingToken, cheapestToken.symbol, strategyState.minNetGainThreshold]);
+  }, [strategyState.autoBotEnabled, strategyState.currentHoldingToken, ranking, strategyState.minNetGainThreshold]);
 
   // Current value of held asset
   const currentHeldTokenData = tokens[strategyState.currentHoldingToken];
@@ -467,6 +588,16 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
           })}
         </div>
       </div>
+
+      {/* Billetera Autónoma de Trading (Sub-Wallet) & Monetización con Platform Fee */}
+      <AutonomousBotWalletCard
+        solPriceUsd={tokens.SOL?.usdPrice || 105}
+        isLiveOnChain={isLiveOnChain}
+        onChangeLiveMode={handleChangeLiveMode}
+        platformFeeConfig={platformFeeConfig}
+        onUpdateFeeConfig={handleUpdateFeeConfig}
+        onKeypairLoaded={(kp) => setBotKeypair(kp)}
+      />
 
       {/* Execution Dashboard: Step 1 Initial Buy & Step 2 Rotation Swap */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-slate-950 p-4 lg:p-5 rounded-xl border border-slate-800">
@@ -747,17 +878,45 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
           {/* Visual Route of Swap */}
           <div className="bg-slate-900/90 p-3.5 rounded-lg border border-slate-800 space-y-3">
             <div className="grid grid-cols-11 items-center gap-2 text-center text-xs">
-              {/* Source Token (Least Drop) */}
+              {/* Source Token (Origen / Venta) */}
               <div className="col-span-5 bg-slate-950 p-2.5 rounded-lg border border-emerald-900/40 text-left">
-                <span className="text-[10px] text-slate-400 block font-semibold">
-                  Origen (Venta / Menor caída):
-                </span>
-                <span className="font-bold text-white text-sm font-mono block">
-                  {strategyState.currentHoldingToken || leastDropToken.symbol}
-                </span>
-                <span className="text-[11px] text-emerald-400 font-mono">
-                  {tokens[strategyState.currentHoldingToken || leastDropToken.symbol]?.priceChange24h.toFixed(2)}% (24h)
-                </span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-slate-400 block font-semibold">
+                    Origen (Venta):
+                  </span>
+                  {strategyState.currentHoldingToken === activeSwapFrom && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/40 font-mono">
+                      En posesión
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={activeSwapFrom}
+                  onChange={(e) => {
+                    const newSource = e.target.value as CryptoSymbol;
+                    setSelectedSourceToken(newSource);
+                    // Si el destino era igual al nuevo origen, reseteamos el destino para que elija automáticamente otro
+                    if (activeSwapTo === newSource) {
+                      setSelectedTargetToken(null);
+                    }
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 text-white font-bold text-sm font-mono rounded px-2 py-1 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                >
+                  {Object.keys(tokens).map((sym) => (
+                    <option key={sym} value={sym}>
+                      {sym} ({tokens[sym]?.priceChange24h > 0 ? "+" : ""}{tokens[sym]?.priceChange24h.toFixed(2)}%)
+                    </option>
+                  ))}
+                </select>
+                <div className="flex justify-between items-center mt-1.5 text-[11px] font-mono">
+                  <span className="text-slate-400">
+                    ${tokens[activeSwapFrom]?.usdPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                  </span>
+                  <span className={tokens[activeSwapFrom]?.priceChange24h >= 0 ? "text-emerald-400" : "text-amber-400"}>
+                    {tokens[activeSwapFrom]?.priceChange24h > 0 ? "+" : ""}
+                    {tokens[activeSwapFrom]?.priceChange24h.toFixed(2)}% (24h)
+                  </span>
+                </div>
               </div>
 
               {/* Swap Icon */}
@@ -765,19 +924,67 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                 <ArrowRight className="w-4 h-4" />
               </div>
 
-              {/* Target Token (Cheapest / Deepest Drop) */}
+              {/* Target Token (Destino / Compra) - NUNCA igual al Origen */}
               <div className="col-span-5 bg-slate-950 p-2.5 rounded-lg border border-rose-900/40 text-left">
-                <span className="text-[10px] text-slate-400 block font-semibold">
-                  Destino (Compra / Mayor caída):
-                </span>
-                <span className="font-bold text-white text-sm font-mono block">
-                  {cheapestToken.symbol}
-                </span>
-                <span className="text-[11px] text-rose-400 font-mono">
-                  {cheapestToken.changePercent.toFixed(2)}% (24h)
-                </span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-slate-400 block font-semibold">
+                    Destino (Compra / Mayor caída):
+                  </span>
+                  {activeSwapTo === autoBestDestination.symbol ? (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/40 font-mono">
+                      Óptimo
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTargetToken(null)}
+                      className="text-[9px] text-cyan-400 hover:underline"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={activeSwapTo}
+                  onChange={(e) => {
+                    const newTarget = e.target.value as CryptoSymbol;
+                    if (newTarget !== activeSwapFrom) {
+                      setSelectedTargetToken(newTarget);
+                    }
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 text-white font-bold text-sm font-mono rounded px-2 py-1 focus:outline-none focus:border-rose-500 cursor-pointer"
+                >
+                  {Object.keys(tokens).map((sym) => {
+                    const isSource = sym === activeSwapFrom;
+                    const isAuto = sym === autoBestDestination.symbol;
+                    return (
+                      <option key={sym} value={sym} disabled={isSource}>
+                        {sym} ({tokens[sym]?.priceChange24h > 0 ? "+" : ""}{tokens[sym]?.priceChange24h.toFixed(2)}%)
+                        {isSource ? " — [Origen: No permitido]" : isAuto ? " — [Mayor caída]" : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <div className="flex justify-between items-center mt-1.5 text-[11px] font-mono">
+                  <span className="text-slate-400">
+                    ${tokens[activeSwapTo]?.usdPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                  </span>
+                  <span className={tokens[activeSwapTo]?.priceChange24h >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                    {tokens[activeSwapTo]?.priceChange24h > 0 ? "+" : ""}
+                    {tokens[activeSwapTo]?.priceChange24h.toFixed(2)}% (24h)
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Aviso informativo si el origen ya es la moneda más barata del mercado */}
+            {activeSwapFrom === overallCheapestToken.symbol && (
+              <div className="bg-slate-950/70 p-2 rounded border border-slate-800 text-[11px] text-slate-400">
+                <span>
+                  💡 <strong className="text-white">{activeSwapFrom}</strong> ya es la moneda con mayor porcentaje de caída global. Para rotar sin recomprar el mismo activo, el destino seleccionado con mayor descuento es <strong className="text-cyan-400">{activeSwapTo}</strong>.
+                </span>
+              </div>
+            )}
 
             {/* DESGLOSE DETALLADO DE COSTES Y CONDICIÓN DE RENTABILIDAD */}
             {activeMetrics && (
@@ -785,7 +992,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 flex items-center gap-1 font-medium">
                     <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-                    Costes de la Operación:
+                    Costes de la Operación ({activeSwapFrom} ➔ {activeSwapTo}):
                   </span>
                   <span className="font-mono text-slate-200 font-bold">
                     ${activeMetrics.totalCostsUsd.toFixed(2)} USD
@@ -849,11 +1056,11 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             onClick={() => handleRotationSwap()}
             disabled={
               isExecuting ||
-              (strategyState.currentHoldingToken === cheapestToken.symbol) ||
+              activeSwapFrom === activeSwapTo ||
               !activeMetrics?.isProfitable
             }
             className={`w-full py-3 px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all ${
-              strategyState.currentHoldingToken === cheapestToken.symbol
+              activeSwapFrom === activeSwapTo
                 ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed"
                 : activeMetrics?.isProfitable
                 ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-950/50 ring-1 ring-emerald-400/50"
@@ -862,10 +1069,10 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
           >
             <ArrowRightLeft className="w-4 h-4" />
             <span>
-              {strategyState.currentHoldingToken === cheapestToken.symbol
-                ? `Ya posees ${cheapestToken.symbol} (Más barata, esperando rotación)`
+              {activeSwapFrom === activeSwapTo
+                ? `Origen y destino no pueden ser iguales (${activeSwapFrom} ➔ ${activeSwapTo})`
                 : activeMetrics?.isProfitable
-                ? `Realizar Swap Rentable: ${strategyState.currentHoldingToken} ➔ ${cheapestToken.symbol} (+${activeMetrics.netGainPercent.toFixed(2)}% neto)`
+                ? `Realizar Swap Rentable: ${activeSwapFrom} ➔ ${activeSwapTo} (+${activeMetrics.netGainPercent.toFixed(2)}% neto)`
                 : `Swap Bloqueado: Aumento neto (+${activeMetrics?.netGainPercent.toFixed(2) ?? "0"}%) no alcanza +${strategyState.minNetGainThreshold ?? 0.5}% tras costes`}
             </span>
           </button>

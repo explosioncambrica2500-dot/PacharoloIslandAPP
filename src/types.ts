@@ -96,10 +96,27 @@ export interface ChartDataPoint {
 
 export type TimeFrame = '1M' | '5M' | '15M' | '1H' | '24H';
 
+export interface BotSubWalletConfig {
+  publicKey: string;
+  secretKeyBase58: string;
+  isLiveOnChain: boolean;
+  solBalance: number;
+  tokenBalances: Partial<Record<CryptoSymbol, number>>;
+  lastUpdated: string;
+}
+
+export interface PlatformFeeConfig {
+  feeCollectorAddress: string;
+  platformFeeBps: number; // e.g. 20 bps = 0.20%
+  totalFeesCollectedUsd: number;
+  totalSwapsMonetized: number;
+}
+
 export interface WalletConfig {
   mode: 'PAPER' | 'REAL';
   address: string;
   providerName?: string;
   isConnected: boolean;
   paperBalanceUsd: number;
+  subWallet?: BotSubWalletConfig;
 }
