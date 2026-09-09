@@ -1,52 +1,149 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Background Gradient -->
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#020617" />
-      <stop offset="50%" stop-color="#0f172a" />
-      <stop offset="100%" stop-color="#020617" />
+      <stop offset="45%" stop-color="#0b192c" />
+      <stop offset="100%" stop-color="#042f2e" />
     </linearGradient>
-    <linearGradient id="planet" x1="0%" y1="0%" x2="100%" y2="100%">
+
+    <!-- Ocean Gradient -->
+    <linearGradient id="oceanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <!-- Island Rock & Sand -->
+    <linearGradient id="sandGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Island Lush Hills -->
+    <linearGradient id="grassGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#065f46" />
+    </linearGradient>
+
+    <!-- Castle Stone Gradient -->
+    <linearGradient id="castleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="35%" stop-color="#cbd5e1" />
+      <stop offset="80%" stop-color="#64748b" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+
+    <!-- Castle Roofs & Accent -->
+    <linearGradient id="roofGrad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#06b6d4" />
       <stop offset="50%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#8b5cf6" />
     </linearGradient>
-    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9" />
-      <stop offset="50%" stop-color="#a855f7" stop-opacity="0.7" />
-      <stop offset="100%" stop-color="#34d399" stop-opacity="0.9" />
+
+    <!-- Glowing Solana Beacon / Sun -->
+    <linearGradient id="solanaAura" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14f195" />
+      <stop offset="50%" stop-color="#00c2ff" />
+      <stop offset="100%" stop-color="#9945ff" />
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
+
+    <filter id="beaconGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
 
-  <!-- Background Canvas -->
-  <rect width="512" height="512" rx="108" fill="url(#bg)" />
-  <rect width="512" height="512" rx="108" fill="none" stroke="#1e293b" stroke-width="4" />
+  <!-- App Rounded Frame -->
+  <rect width="512" height="512" rx="112" fill="url(#skyGrad)" />
+  <rect width="512" height="512" rx="112" fill="none" stroke="#1e293b" stroke-width="4" />
 
-  <!-- Outer Ring Shadow / Glow -->
-  <ellipse cx="256" cy="256" rx="200" ry="60" fill="none" stroke="url(#ring)" stroke-width="16" transform="rotate(-28 256 256)" filter="url(#glow)" opacity="0.8" />
+  <!-- Stars / Digital Sparkles -->
+  <circle cx="80" cy="110" r="2.5" fill="#38bdf8" opacity="0.8" />
+  <circle cx="160" cy="70" r="3" fill="#ffffff" opacity="0.9" />
+  <circle cx="410" cy="95" r="2" fill="#a7f3d0" opacity="0.8" />
+  <circle cx="440" cy="170" r="3" fill="#38bdf8" opacity="0.7" />
+  <circle cx="110" cy="190" r="2" fill="#e2e8f0" opacity="0.6" />
 
-  <!-- Central Planet (Jupiter) -->
-  <circle cx="256" cy="256" r="120" fill="url(#planet)" />
+  <!-- Celestial Aura behind the Castle -->
+  <circle cx="256" cy="180" r="130" fill="url(#solanaAura)" opacity="0.18" filter="url(#beaconGlow)" />
 
-  <!-- Atmospheric Stripes on Jupiter -->
-  <path d="M 145 230 Q 256 260 367 230" fill="none" stroke="#ffffff" stroke-width="8" stroke-opacity="0.3" />
-  <path d="M 140 260 Q 256 295 372 260" fill="none" stroke="#020617" stroke-width="10" stroke-opacity="0.25" />
-  <path d="M 152 285 Q 256 320 360 285" fill="none" stroke="#ffffff" stroke-width="6" stroke-opacity="0.35" />
+  <!-- Ocean Waves & Base Water -->
+  <path d="M 32 380 Q 140 350 256 370 T 480 380 L 480 480 Q 480 480 480 480 L 32 480 Z" fill="url(#oceanGrad)" />
+  <path d="M 40 405 Q 160 385 280 405 T 472 405" fill="none" stroke="#67e8f9" stroke-width="4" stroke-linecap="round" opacity="0.7" />
+  <path d="M 70 435 Q 200 420 330 435 T 450 435" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" opacity="0.5" />
 
-  <!-- Great Red/Cyan Spot -->
-  <circle cx="305" cy="290" r="18" fill="#f43f5e" fill-opacity="0.8" />
-  <circle cx="305" cy="290" r="14" fill="#fb7185" />
+  <!-- The Island: Rocky Base & Cliff -->
+  <path d="M 75 375 Q 110 395 180 398 Q 256 405 340 396 Q 415 390 437 375 Q 420 345 385 330 Q 320 310 256 312 Q 185 310 125 332 Q 85 350 75 375 Z" fill="url(#sandGrad)" />
 
-  <!-- Front Half of Orbital Ring -->
-  <path d="M 76 325 A 200 60 0 0 0 436 187" fill="none" stroke="url(#ring)" stroke-width="18" stroke-linecap="round" transform="rotate(-28 256 256)" />
+  <!-- The Island: Lush Tropical Vegetation Layer -->
+  <path d="M 95 365 C 120 335 170 320 256 320 C 340 320 390 335 417 365 C 380 382 320 388 256 388 C 190 388 135 382 95 365 Z" fill="url(#grassGrad)" />
 
-  <!-- Central Dex Bolt / Swap Arrow Badge -->
-  <g transform="translate(256, 256)">
-    <!-- Cyan glow point -->
-    <circle cx="0" cy="0" r="32" fill="#020617" fill-opacity="0.8" stroke="#38bdf8" stroke-width="4" />
-    <path d="M -8 -16 L 10 -4 L 0 0 L 8 16 L -10 4 L 0 0 Z" fill="#38bdf8" />
+  <!-- Tropical Palm Tree 1 (Left) -->
+  <g transform="translate(130, 310)">
+    <path d="M 12 35 Q 0 10 -10 0" fill="none" stroke="#78350f" stroke-width="4" stroke-linecap="round" />
+    <path d="M -10 0 Q -30 -5 -35 10" fill="none" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" />
+    <path d="M -10 0 Q -15 -25 -5 -30" fill="none" stroke="#34d399" stroke-width="3.5" stroke-linecap="round" />
+    <path d="M -10 0 Q 15 -20 20 -5" fill="none" stroke="#059669" stroke-width="3.5" stroke-linecap="round" />
   </g>
+
+  <!-- Tropical Palm Tree 2 (Right) -->
+  <g transform="translate(370, 315)">
+    <path d="M -10 30 Q 5 10 12 0" fill="none" stroke="#78350f" stroke-width="3.5" stroke-linecap="round" />
+    <path d="M 12 0 Q 30 -5 32 10" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" />
+    <path d="M 12 0 Q 15 -20 5 -25" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" />
+    <path d="M 12 0 Q -12 -18 -15 -2" fill="none" stroke="#059669" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- ================= CASTLE ON THE ISLAND ================= -->
+  <!-- Castle Foundation / Hilltop Platform -->
+  <polygon points="175,325 337,325 325,310 187,310" fill="#475569" />
+
+  <!-- Outer Castle Wall -->
+  <rect x="190" y="240" width="132" height="70" rx="3" fill="url(#castleGrad)" />
+
+  <!-- Castle Wall Battlements (Merlons) -->
+  <rect x="192" y="232" width="16" height="12" fill="#cbd5e1" />
+  <rect x="216" y="232" width="16" height="12" fill="#cbd5e1" />
+  <rect x="240" y="232" width="16" height="12" fill="#cbd5e1" />
+  <rect x="264" y="232" width="16" height="12" fill="#cbd5e1" />
+  <rect x="288" y="232" width="16" height="12" fill="#cbd5e1" />
+
+  <!-- Left Castle Tower -->
+  <rect x="170" y="210" width="36" height="100" rx="4" fill="url(#castleGrad)" />
+  <polygon points="164,212 212,212 188,165" fill="url(#roofGrad)" />
+  <!-- Left Tower Battlements/Trim -->
+  <rect x="168" y="208" width="40" height="6" fill="#38bdf8" />
+  <rect x="183" y="235" width="10" height="16" rx="5" fill="#0f172a" />
+
+  <!-- Right Castle Tower -->
+  <rect x="306" y="210" width="36" height="100" rx="4" fill="url(#castleGrad)" />
+  <polygon points="300,212 348,212 324,165" fill="url(#roofGrad)" />
+  <!-- Right Tower Battlements/Trim -->
+  <rect x="304" y="208" width="40" height="6" fill="#38bdf8" />
+  <rect x="319" y="235" width="10" height="16" rx="5" fill="#0f172a" />
+
+  <!-- Central Great Keep / Tall Spire -->
+  <rect x="232" y="170" width="48" height="140" rx="4" fill="url(#castleGrad)" />
+  <!-- Central Steeple Roof -->
+  <polygon points="224,172 288,172 256,110" fill="url(#roofGrad)" />
+  <rect x="228" y="168" width="56" height="6" fill="#14f195" />
+
+  <!-- Central Castle Gate / Portal -->
+  <path d="M 242 310 L 242 278 Q 256 268 270 278 L 270 310 Z" fill="#090d16" />
+  <path d="M 244 280 Q 256 272 268 280" fill="none" stroke="#38bdf8" stroke-width="2" />
+  <circle cx="256" cy="285" r="3" fill="#14f195" />
+
+  <!-- Upper Keep Windows -->
+  <rect x="249" y="195" width="14" height="22" rx="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+  <circle cx="256" cy="204" r="2.5" fill="#e0f2fe" />
+
+  <!-- Castle Flag Flying High on the Central Tower -->
+  <line x1="256" y1="110" x2="256" y2="82" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round" />
+  <polygon points="256,84 290,94 256,104" fill="url(#solanaAura)" />
+
+  <!-- Glowing Solana & Jupiter Swap Ring around Castle -->
+  <ellipse cx="256" cy="265" rx="140" ry="38" fill="none" stroke="url(#solanaAura)" stroke-width="4" stroke-dasharray="14 10" opacity="0.65" transform="rotate(-10 256 265)" />
 </svg>

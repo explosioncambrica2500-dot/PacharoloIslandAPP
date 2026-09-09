@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ArrowUpRight, ArrowDownRight, Bell, Copy, Check, TrendingUp } from "lucide-react";
 import { TokenPriceData } from "../types";
+import { useLanguage } from "../utils/i18n";
 
 interface TokenCardProps {
   token: TokenPriceData;
@@ -17,6 +18,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({
   onQuickAlert,
   activeAlertCount,
 }) => {
+  const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [tickDirection, setTickDirection] = useState<"up" | "down" | null>(null);
 
@@ -76,7 +78,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({
       {/* Active Alert Indicator Pill */}
       {activeAlertCount > 0 && (
         <span
-          title={`${activeAlertCount} alerta(s) activa(s) para ${token.symbol}`}
+          title={`${activeAlertCount} ${t("activeAlertsForToken")} ${token.symbol}`}
           className="absolute -top-2 -right-1 z-10 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center gap-1 shadow-sm"
         >
           <Bell className="w-2.5 h-2.5" />
@@ -145,7 +147,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({
           </span>
         </div>
         <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-          <span>Liquidez DEX:</span>
+          <span>{t("dexLiquidity")}</span>
           <span className="font-mono text-slate-300">{formatLiquidity(token.liquidity)}</span>
         </div>
       </div>
@@ -155,7 +157,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({
         <button
           onClick={copyMint}
           className="flex items-center gap-1 font-mono text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
-          title={`Copiar Mint: ${token.mint}`}
+          title={`${t("copyMint")}: ${token.mint}`}
         >
           {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
           <span>
@@ -170,10 +172,10 @@ export const TokenCard: React.FC<TokenCardProps> = ({
             onQuickAlert(token);
           }}
           className="flex items-center gap-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px]"
-          title="Crear alerta de precio"
+          title={t("alert")}
         >
           <Bell className="w-3 h-3 text-amber-400" />
-          <span>Alerta</span>
+          <span>{t("alert")}</span>
         </button>
       </div>
     </div>

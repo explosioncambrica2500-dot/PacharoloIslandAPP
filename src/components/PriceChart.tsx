@@ -18,6 +18,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { TokenPriceData, AlertRule, TimeFrame } from "../types";
+import { useLanguage } from "../utils/i18n";
 
 interface PriceChartProps {
   token: TokenPriceData;
@@ -30,6 +31,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
   activeAlerts,
   onOpenAlertModal,
 }) => {
+  const { t } = useLanguage();
   const [timeframe, setTimeframe] = useState<TimeFrame>("5M");
 
   // Generate synthetic smooth timeframe points anchored to live Jupiter price
@@ -44,7 +46,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
     const volatilityPct = token.symbol === "BTC" ? 0.003 : token.symbol === "ETH" ? 0.005 : token.symbol === "SOL" ? 0.007 : 0.012;
 
     for (let i = pointsCount - 1; i >= 0; i--) {
-      const t = new Date(now - i * intervalMinutes * 60000);
+      const pointDate = new Date(now - i * intervalMinutes * 60000);
       // Continuous wave + random walk leading exactly to current price at i = 0
       const drift = (pointsCount - i) / pointsCount;
       const wave = Math.sin((i / 4) + (token.symbol.charCodeAt(0) % 5)) * 0.7;
@@ -54,11 +56,11 @@ export const PriceChart: React.FC<PriceChartProps> = ({
 
       const timeLabel =
         timeframe === "24H"
-          ? t.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
-          : t.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          ? pointDate.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+          : pointDate.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
       result.push({
-        timestamp: t.getTime(),
+        timestamp: pointDate.getTime(),
         time: timeLabel,
         price: i === 0 ? basePrice : price,
       });
@@ -107,8 +109,8 @@ export const PriceChart: React.FC<PriceChartProps> = ({
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span>Fuente: {token.source}</span>
-              {token.blockId && <span>Bloque: #{token.blockId}</span>}
+              <span>{t("source")} {token.source}</span>
+              {token.blockId && <span>{t("block")} #{token.blockId}</span>}
             </div>
           </div>
         </div>
@@ -135,10 +137,10 @@ export const PriceChart: React.FC<PriceChartProps> = ({
           <button
             onClick={onOpenAlertModal}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition-colors"
-            title="Crear o gestionar alertas para este token"
+            title={t("manageAlerts")}
           >
             <Bell className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Crear Alerta</span>
+            <span className="hidden md:inline">{t("createAlertBtn")}</span>
           </button>
 
           <a
@@ -146,7 +148,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition-colors"
-            title="Abrir en Jupiter DEX"
+            title="Jupiter DEX"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Jupiter</span>
@@ -157,25 +159,25 @@ export const PriceChart: React.FC<PriceChartProps> = ({
       {/* Summary Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 text-xs">
         <div>
-          <span className="text-slate-400 block text-[11px]">Precio Actual</span>
+          <span className="text-slate-400 block text-[11px]">{t("currentPrice")}</span>
           <span className="text-base font-bold text-white font-mono">
             ${token.usdPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
           </span>
         </div>
         <div>
-          <span className="text-slate-400 block text-[11px]">Máximo ({timeframe})</span>
+          <span className="text-slate-400 block text-[11px]">{t("highTimeframe")} ({timeframe})</span>
           <span className="text-base font-bold text-emerald-400 font-mono">
             ${maxPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
           </span>
         </div>
         <div>
-          <span className="text-slate-400 block text-[11px]">Mínimo ({timeframe})</span>
+          <span className="text-slate-400 block text-[11px]">{t("lowTimeframe")} ({timeframe})</span>
           <span className="text-base font-bold text-rose-400 font-mono">
             ${minPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
           </span>
         </div>
         <div>
-          <span className="text-slate-400 block text-[11px]">Alertas Activas</span>
+          <span className="text-slate-400 block text-[11px]">{t("activeAlertsHeader")}</span>
           <span className="text-base font-bold text-amber-400 font-mono flex items-center gap-1">
             {tokenAlerts.length}
             {tokenAlerts.length > 0 && (
@@ -250,7 +252,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
                 strokeDasharray="4 4"
                 strokeWidth={1.5}
                 label={{
-                  value: `Alerta: ${alert.condition === "ABOVE" ? "≥" : "≤"} $${alert.targetPrice}`,
+                  value: `${t("alert")}: ${alert.condition === "ABOVE" ? "≥" : "≤"} $${alert.targetPrice}`,
                   fill: "#fbbf24",
                   fontSize: 10,
                   position: "insideTopRight",
@@ -274,7 +276,7 @@ export const PriceChart: React.FC<PriceChartProps> = ({
       <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
         <span className="flex items-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          Precios obtenidos del enrutador de liquidez de Jupiter DEX (Solana Mainnet)
+          {t("dexRouteSource")}
         </span>
         <span className="font-mono">
           Mint: {token.mint.slice(0, 8)}...{token.mint.slice(-6)}

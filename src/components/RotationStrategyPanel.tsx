@@ -35,6 +35,7 @@ import {
   BotKeypairData,
   getOrCreateBotKeypair,
 } from "../utils/solanaBot";
+import { useLanguage } from "../utils/i18n";
 
 interface RotationStrategyPanelProps {
   tokens: Record<CryptoSymbol, TokenPriceData>;
@@ -51,6 +52,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
   walletConfig,
   onOpenWalletModal,
 }) => {
+  const { t } = useLanguage();
   // Autonomous Sub-Wallet & Platform Fee state
   const [botKeypair, setBotKeypair] = useState<BotKeypairData>(() => getOrCreateBotKeypair());
   const [isLiveOnChain, setIsLiveOnChain] = useState<boolean>(() => {
@@ -423,13 +425,13 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                Estrategia de Rotación por Porcentaje de Cambio
+                {t("strategyHeading")}
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/40 uppercase font-semibold">
-                  Jupiter DEX Swap
+                  {t("dexSwapBadge")}
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Rotación de la moneda que ha bajado menos a la que ha bajado más, comenzando con una compra de la que más porcentaje de cambio a la baja tenga (la más barata)
+                {t("strategyHeadingDesc")}
               </p>
             </div>
           </div>
@@ -445,13 +447,13 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                   ? "bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/60"
                   : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
               }`}
-              title="Configurar Wallet Solana o modo de simulación"
+              title="Configurar Wallet"
             >
               <Wallet className={`w-3.5 h-3.5 ${walletConfig?.isConnected ? "text-emerald-400" : "text-cyan-400"}`} />
               <span>
                 {walletConfig?.isConnected
                   ? `Wallet: ${walletConfig.address.substring(0, 4)}...${walletConfig.address.substring(walletConfig.address.length - 4)}`
-                  : "Configurar Wallet"}
+                  : t("configWallet")}
               </span>
             </button>
           )}
@@ -461,16 +463,16 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition-colors"
           >
             <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{showExplainer ? "Ocultar Explicación" : "¿Cómo funciona?"}</span>
+            <span>{showExplainer ? t("hideExplanation") : t("howItWorks")}</span>
           </button>
 
           {/* Auto Bot Toggle */}
           <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
             <Bot className={`w-4 h-4 ${strategyState.autoBotEnabled ? "text-emerald-400 animate-pulse" : "text-slate-500"}`} />
             <div className="text-[11px]">
-              <span className="text-slate-400 block leading-tight">Bot Rebalanceo:</span>
+              <span className="text-slate-400 block leading-tight">{t("rebalanceBot")}</span>
               <span className={`font-bold ${strategyState.autoBotEnabled ? "text-emerald-400" : "text-slate-500"}`}>
-                {strategyState.autoBotEnabled ? "ACTIVO (Auto-Swap)" : "MANUAL"}
+                {strategyState.autoBotEnabled ? t("botActiveAuto") : t("botManual")}
               </span>
             </div>
             <button
@@ -498,20 +500,20 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
       {showExplainer && (
         <div className="bg-slate-950/90 border border-cyan-900/40 rounded-xl p-4 text-xs text-slate-300 space-y-2 animate-in fade-in duration-200">
           <h4 className="font-bold text-white flex items-center gap-1.5 text-sm text-cyan-300">
-            <Zap className="w-4 h-4" /> Lógica Algorítmica de la Estrategia:
+            <Zap className="w-4 h-4" /> {t("strategyExplainerTitle")}
           </h4>
           <ol className="list-decimal list-inside space-y-1.5 text-slate-300 pl-1">
             <li>
-              <strong className="text-white">Cálculo de porcentaje de cambio:</strong> Se evalúa en tiempo real el % de variación de cada una de las 5 monedas (BTC, ETH, SOL, ZEC, HYPE) obtenidas desde Jupiter DEX.
+              <strong className="text-white">{t("strategyStep1")}</strong>
             </li>
             <li>
-              <strong className="text-white">1. Compra Inicial (Mayor % de caída a la baja / Más Barata):</strong> El ciclo comienza adquiriendo la moneda que más porcentaje de cambio a la baja tenga (el activo con mayor descuento relativo al momento de inicio).
+              <strong className="text-white">{t("strategyStep2")}</strong>
             </li>
             <li>
-              <strong className="text-white">2. Swap Rotativo (Menor Caída ➔ Mayor Caída):</strong> Se intercambia la moneda que ha bajado menos (o ha subido más) por la que ha caído más (máximo descuento / sobreventa), buscando acumular mayor cantidad de tokens al precio más favorable.
+              <strong className="text-white">{t("strategyStep3")}</strong>
             </li>
             <li>
-              <strong className="text-white">Registro y CSV:</strong> Cada compra y cada swap rotativo queda registrado en el historial de transacciones con el diferencial (spread %) y puede exportarse a CSV en cualquier momento.
+              <strong className="text-white">{t("strategyStep4")}</strong>
             </li>
           </ol>
         </div>
@@ -523,11 +525,11 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
           <div className="flex items-center gap-2">
             <Percent className="w-4 h-4 text-cyan-400" />
             <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              Ranking de Desempeño (% de Cambio entre Monedas)
+              {t("rankingTitle")}
             </h4>
           </div>
           <div className="text-xs font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-            Diferencial (Spread):{" "}
+            {t("spreadDiff")}{" "}
             <strong className="text-cyan-400">+{spreadPercent.toFixed(2)}%</strong>
           </div>
         </div>
@@ -552,12 +554,12 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                   </span>
                   {item.isHighest && (
                     <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/40">
-                      Menor caída / Mayor %
+                      {t("leastDropBadge")}
                     </span>
                   )}
                   {item.isLowest && (
                     <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-900/60 text-rose-300 border border-rose-700/40">
-                      Mayor caída / Descuento
+                      {t("mostDropBadge")}
                     </span>
                   )}
                 </div>
@@ -575,7 +577,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                 </div>
 
                 <div className="mt-2 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-                  <span>Precio:</span>
+                  <span>{t("price")}</span>
                   <span className="font-mono text-slate-200 font-semibold">
                     ${item.usdPrice.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
@@ -606,7 +608,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <DollarSign className="w-4 h-4 text-emerald-400" />
-              1. Monto & Configuración a Mano
+              {t("capitalConfigTitle")}
             </h4>
             <span
               className={`text-[10px] px-2 py-0.5 rounded font-bold ${
@@ -615,7 +617,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                 : "bg-amber-950 text-amber-300 border border-amber-800/40"
               }`}
             >
-              {strategyState.initialBuyDone ? "Posición Activa" : "Pendiente de Compra"}
+              {strategyState.initialBuyDone ? t("activePosition") : t("pendingBuy")}
             </span>
           </div>
 
@@ -624,7 +626,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             {/* Monto de Capital Reconfigurable a Mano */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="font-medium text-slate-300">Monto total de capital:</span>
+                <span className="font-medium text-slate-300">{t("totalCapitalAmount")}</span>
                 <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 focus-within:border-cyan-500">
                   <span className="text-slate-400">$</span>
                   <input
@@ -653,7 +655,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
 
               {/* Botones de ajuste rápido de capital */}
               <div className="flex items-center gap-1.5 pt-0.5">
-                <span className="text-[10px] text-slate-500">Rápido:</span>
+                <span className="text-[10px] text-slate-500">{t("quickSelect")}</span>
                 {[100, 250, 500, 1000, 2500].map((amt) => (
                   <button
                     key={amt}
@@ -684,7 +686,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             {/* Tenencia activa actual con edición manual */}
             <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="text-slate-300">Tenencia en posesión:</span>
+                <span className="text-slate-300">{t("holdingInPosession")}</span>
                 {isEditingHolding ? (
                   <div className="flex items-center gap-1">
                     <input
@@ -724,7 +726,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                     <span className="font-bold text-white font-mono">
                       {strategyState.currentHoldingAmount > 0
                         ? `${strategyState.currentHoldingAmount} ${strategyState.currentHoldingToken}`
-                        : "Sin posición inicial"}
+                        : t("noInitialPosition")}
                     </span>
                     <button
                       type="button"
@@ -733,7 +735,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                         setIsEditingHolding(true);
                       }}
                       className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-cyan-400 transition-colors"
-                      title="Reconfigurar cantidad de tenencia a mano"
+                      title="Reconfigurar"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
@@ -742,7 +744,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
               </div>
 
               <div className="flex justify-between text-slate-400">
-                <span>Valor portafolio en DEX:</span>
+                <span>{t("portfolioValueDex")}</span>
                 <span className="font-bold text-cyan-400 font-mono text-sm">
                   ${currentPortfolioValueUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD
                 </span>
@@ -752,13 +754,13 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             {/* Configuración del Umbral Mínimo de Aumento Neto tras costes */}
             <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
               <div className="flex justify-between items-center text-slate-400">
-                <span className="text-slate-300">Aumento neto mínimo requerido:</span>
+                <span className="text-slate-300">{t("minNetGainLabel")}</span>
                 <span className="font-bold text-emerald-400 font-mono bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">
                   +{strategyState.minNetGainThreshold ?? 0.5}%
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-500">Umbral:</span>
+                <span className="text-[10px] text-slate-500">{t("threshold")}:</span>
                 {[0.3, 0.5, 0.75, 1.0, 1.5].map((thresh) => (
                   <button
                     key={thresh}
@@ -789,13 +791,13 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                 className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-cyan-400 transition-colors"
               >
                 <Sliders className="w-3 h-3" />
-                <span>{showCostSettings ? "Ocultar parámetros de coste" : "Ajustar costes de red y slippage"}</span>
+                <span>{showCostSettings ? t("hideCostParams") : t("adjustCosts")}</span>
               </button>
 
               {showCostSettings && (
                 <div className="mt-2 p-2.5 rounded bg-slate-950 border border-slate-800 space-y-2 text-[11px]">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Gas estimado Solana (USD):</span>
+                    <span className="text-slate-400">{t("gasEstimatedSol")}</span>
                     <input
                       type="number"
                       step="0.005"
@@ -810,7 +812,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                     />
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Fee DEX Jupiter (%):</span>
+                    <span className="text-slate-400">{t("jupiterDexFee")}</span>
                     <input
                       type="number"
                       step="0.01"
@@ -825,7 +827,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                     />
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Slippage / Deslizamiento (%):</span>
+                    <span className="text-slate-400">{t("slippagePct")}</span>
                     <input
                       type="number"
                       step="0.05"
@@ -857,8 +859,8 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             <Play className="w-4 h-4 fill-current" />
             <span>
               {strategyState.initialBuyDone
-                ? `Re-comprar Inicial de ${cheapestToken?.symbol || "Moneda"} ($${initialCapitalUsd} USD)`
-                : `Compra Inicial de ${cheapestToken?.symbol || "Moneda"} (Mayor Caída / Más Barata)`}
+                ? `${t("reBuyCheapestTokenInitial")} ${cheapestToken?.symbol || "Token"} ($${initialCapitalUsd} USD)`
+                : `${t("buyCheapestTokenInitial")} ${cheapestToken?.symbol || "Token"} ${t("largestDropCheapest")}`}
             </span>
           </button>
         </div>
@@ -868,10 +870,10 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
-              2. Swap Rotativo & Cálculo de Costes
+              {t("rotationSwapCostsTitle")}
             </h4>
             <span className="text-[11px] font-mono text-cyan-400">
-              {strategyState.totalSwapsCount} swaps ejecutados
+              {strategyState.totalSwapsCount} {t("swapsExecutedCount")}
             </span>
           </div>
 
@@ -882,11 +884,11 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
               <div className="col-span-5 bg-slate-950 p-2.5 rounded-lg border border-emerald-900/40 text-left">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] text-slate-400 block font-semibold">
-                    Origen (Venta):
+                    {t("sourceSellLabel")}
                   </span>
                   {strategyState.currentHoldingToken === activeSwapFrom && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/40 font-mono">
-                      En posesión
+                      {t("holdingBadge")}
                     </span>
                   )}
                 </div>
@@ -902,19 +904,22 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                   }}
                   className="w-full bg-slate-900 border border-slate-700 text-white font-bold text-sm font-mono rounded px-2 py-1 focus:outline-none focus:border-cyan-500 cursor-pointer"
                 >
-                  {Object.keys(tokens).map((sym) => (
-                    <option key={sym} value={sym}>
-                      {sym} ({tokens[sym]?.priceChange24h > 0 ? "+" : ""}{tokens[sym]?.priceChange24h.toFixed(2)}%)
-                    </option>
-                  ))}
+                  {Object.keys(tokens).map((sym) => {
+                    const change = tokens[sym as CryptoSymbol]?.priceChange24h ?? 0;
+                    return (
+                      <option key={sym} value={sym}>
+                        {sym} ({change > 0 ? "+" : ""}{change.toFixed(2)}%)
+                      </option>
+                    );
+                  })}
                 </select>
                 <div className="flex justify-between items-center mt-1.5 text-[11px] font-mono">
                   <span className="text-slate-400">
-                    ${tokens[activeSwapFrom]?.usdPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    ${(tokens[activeSwapFrom]?.usdPrice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </span>
-                  <span className={tokens[activeSwapFrom]?.priceChange24h >= 0 ? "text-emerald-400" : "text-amber-400"}>
-                    {tokens[activeSwapFrom]?.priceChange24h > 0 ? "+" : ""}
-                    {tokens[activeSwapFrom]?.priceChange24h.toFixed(2)}% (24h)
+                  <span className={(tokens[activeSwapFrom]?.priceChange24h ?? 0) >= 0 ? "text-emerald-400" : "text-amber-400"}>
+                    {(tokens[activeSwapFrom]?.priceChange24h ?? 0) > 0 ? "+" : ""}
+                    {(tokens[activeSwapFrom]?.priceChange24h ?? 0).toFixed(2)}% (24h)
                   </span>
                 </div>
               </div>
@@ -928,11 +933,11 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
               <div className="col-span-5 bg-slate-950 p-2.5 rounded-lg border border-rose-900/40 text-left">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] text-slate-400 block font-semibold">
-                    Destino (Compra / Mayor caída):
+                    {t("targetBuyLabel")}
                   </span>
                   {activeSwapTo === autoBestDestination.symbol ? (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/40 font-mono">
-                      Óptimo
+                      {t("optimalBadge")}
                     </span>
                   ) : (
                     <button
@@ -940,7 +945,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                       onClick={() => setSelectedTargetToken(null)}
                       className="text-[9px] text-cyan-400 hover:underline"
                     >
-                      Auto
+                      {t("autoBadge")}
                     </button>
                   )}
                 </div>
@@ -957,21 +962,22 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                   {Object.keys(tokens).map((sym) => {
                     const isSource = sym === activeSwapFrom;
                     const isAuto = sym === autoBestDestination.symbol;
+                    const change = tokens[sym as CryptoSymbol]?.priceChange24h ?? 0;
                     return (
                       <option key={sym} value={sym} disabled={isSource}>
-                        {sym} ({tokens[sym]?.priceChange24h > 0 ? "+" : ""}{tokens[sym]?.priceChange24h.toFixed(2)}%)
-                        {isSource ? " — [Origen: No permitido]" : isAuto ? " — [Mayor caída]" : ""}
+                        {sym} ({change > 0 ? "+" : ""}{change.toFixed(2)}%)
+                        {isSource ? ` ${t("sourceDisabled")}` : isAuto ? ` ${t("deepestDipOption")}` : ""}
                       </option>
                     );
                   })}
                 </select>
                 <div className="flex justify-between items-center mt-1.5 text-[11px] font-mono">
                   <span className="text-slate-400">
-                    ${tokens[activeSwapTo]?.usdPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    ${(tokens[activeSwapTo]?.usdPrice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </span>
-                  <span className={tokens[activeSwapTo]?.priceChange24h >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                    {tokens[activeSwapTo]?.priceChange24h > 0 ? "+" : ""}
-                    {tokens[activeSwapTo]?.priceChange24h.toFixed(2)}% (24h)
+                  <span className={(tokens[activeSwapTo]?.priceChange24h ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                    {(tokens[activeSwapTo]?.priceChange24h ?? 0) > 0 ? "+" : ""}
+                    {(tokens[activeSwapTo]?.priceChange24h ?? 0).toFixed(2)}% (24h)
                   </span>
                 </div>
               </div>
@@ -981,7 +987,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             {activeSwapFrom === overallCheapestToken.symbol && (
               <div className="bg-slate-950/70 p-2 rounded border border-slate-800 text-[11px] text-slate-400">
                 <span>
-                  💡 <strong className="text-white">{activeSwapFrom}</strong> ya es la moneda con mayor porcentaje de caída global. Para rotar sin recomprar el mismo activo, el destino seleccionado con mayor descuento es <strong className="text-cyan-400">{activeSwapTo}</strong>.
+                  💡 <strong className="text-white">{activeSwapFrom}</strong> {t("cheapestTokenNotice")} <strong className="text-cyan-400">{activeSwapTo}</strong>.
                 </span>
               </div>
             )}
@@ -992,7 +998,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 flex items-center gap-1 font-medium">
                     <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-                    Costes de la Operación ({activeSwapFrom} ➔ {activeSwapTo}):
+                    {t("operationCosts")} ({activeSwapFrom} ➔ {activeSwapTo}):
                   </span>
                   <span className="font-mono text-slate-200 font-bold">
                     ${activeMetrics.totalCostsUsd.toFixed(2)} USD
@@ -1001,15 +1007,15 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
 
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
                   <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                    <span className="text-slate-500 block">Gas Red Solana</span>
+                    <span className="text-slate-500 block">{t("solanaNetworkGas")}</span>
                     <span className="font-mono font-bold text-slate-200">${activeMetrics.gasFeeUsd.toFixed(3)}</span>
                   </div>
                   <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                    <span className="text-slate-500 block">Fee DEX ({activeMetrics.dexFeePercent}%)</span>
+                    <span className="text-slate-500 block">{t("dexFeeTag")} ({activeMetrics.dexFeePercent}%)</span>
                     <span className="font-mono font-bold text-slate-200">${activeMetrics.dexFeeUsd.toFixed(2)}</span>
                   </div>
                   <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                    <span className="text-slate-500 block">Slippage ({activeMetrics.slippagePercent}%)</span>
+                    <span className="text-slate-500 block">{t("slippageTag")} ({activeMetrics.slippagePercent}%)</span>
                     <span className="font-mono font-bold text-slate-200">${activeMetrics.slippageUsd.toFixed(2)}</span>
                   </div>
                 </div>
@@ -1025,17 +1031,17 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                       {activeMetrics.isProfitable ? (
                         <>
                           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                          <span>Aumento Neto: +{activeMetrics.netGainPercent.toFixed(2)}% (+${activeMetrics.netGainUsd.toFixed(2)} USD)</span>
+                          <span>{t("netGainLabel")} +{activeMetrics.netGainPercent.toFixed(2)}% (+${activeMetrics.netGainUsd.toFixed(2)} USD)</span>
                         </>
                       ) : (
                         <>
                           <ShieldAlert className="w-4 h-4 text-amber-400" />
-                          <span>Aumento Neto: +{activeMetrics.netGainPercent.toFixed(2)}% (+${activeMetrics.netGainUsd.toFixed(2)} USD)</span>
+                          <span>{t("netGainLabel")} +{activeMetrics.netGainPercent.toFixed(2)}% (+${activeMetrics.netGainUsd.toFixed(2)} USD)</span>
                         </>
                       )}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Diferencial bruto (spread): +{activeMetrics.spread.toFixed(2)}% | Objetivo mínimo: +{activeMetrics.minNetGain.toFixed(2)}%
+                      {t("grossSpreadLabel")} +{activeMetrics.spread.toFixed(2)}% | {t("minTargetLabel")} +{activeMetrics.minNetGain.toFixed(2)}%
                     </p>
                   </div>
 
@@ -1044,7 +1050,7 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
                       ? "bg-emerald-900/80 text-emerald-200 border border-emerald-500/40"
                       : "bg-amber-900/80 text-amber-200 border border-amber-500/40"
                   }`}>
-                    {activeMetrics.isProfitable ? "Apto para Swap" : "Swap Bloqueado"}
+                    {activeMetrics.isProfitable ? t("eligibleForSwap") : t("swapLocked")}
                   </span>
                 </div>
               </div>
@@ -1070,10 +1076,10 @@ export const RotationStrategyPanel: React.FC<RotationStrategyPanelProps> = ({
             <ArrowRightLeft className="w-4 h-4" />
             <span>
               {activeSwapFrom === activeSwapTo
-                ? `Origen y destino no pueden ser iguales (${activeSwapFrom} ➔ ${activeSwapTo})`
+                ? `${t("sameTokenError")} (${activeSwapFrom} ➔ ${activeSwapTo})`
                 : activeMetrics?.isProfitable
-                ? `Realizar Swap Rentable: ${activeSwapFrom} ➔ ${activeSwapTo} (+${activeMetrics.netGainPercent.toFixed(2)}% neto)`
-                : `Swap Bloqueado: Aumento neto (+${activeMetrics?.netGainPercent.toFixed(2) ?? "0"}%) no alcanza +${strategyState.minNetGainThreshold ?? 0.5}% tras costes`}
+                ? `${t("executeProfitableSwap")} ${activeSwapFrom} ➔ ${activeSwapTo} (+${activeMetrics.netGainPercent.toFixed(2)}% neto)`
+                : `${t("swapLockedNetGainNotMet")} (+${activeMetrics?.netGainPercent.toFixed(2) ?? "0"}%)`}
             </span>
           </button>
         </div>

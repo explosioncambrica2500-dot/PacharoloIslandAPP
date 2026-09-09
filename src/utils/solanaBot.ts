@@ -54,8 +54,109 @@ export function getOrCreateBotKeypair(): BotKeypairData {
   return data;
 }
 
+export const WALLET_UPDATED_EVENT = "pacharolo_wallet_updated";
+
 /**
- * Regenera una nueva sub-wallet
+ * Valida y analiza una clave privada ingresada por el usuario (Base58 o JSON byte array)
+ */
+export function validatePrivateKey(privateKeyInput: string): {
+  valid: boolean;
+  publicKey?: string;
+  secretKeyBase58?: string;
+  error?: string;
+} {
+  const trimmed = privateKeyInput.trim();
+  if (!trimmed) {
+    return { valid: false, error: "Ingresa tu clave privada." };
+  }
+
+  try {
+    let secretKeyBytes: Uint8Array;
+
+    // Detectar si es un array JSON de bytes (formato Solana CLI / Solflare JSON)
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) && (parsed.length === 64 || parsed.length === 32)) {
+          secretKeyBytes = new Uint8Array(parsed);
+        } else {
+          return {
+            valid: false,
+            error: "El array de bytes debe tener 64 números (clave completa) o 32 números (seed).",
+          };
+        }
+      } catch {
+        return { valid: false, error: "Formato de array JSON inválido." };
+      }
+    } else {
+      // Intentar decodificar como cadena Base58 (Phantom / Solflare estándar)
+      try {
+        secretKeyBytes = bs58.decode(trimmed);
+      } catch {
+        return {
+          valid: false,
+          error: "Formato Base58 inválido. Asegúrate de copiar la clave privada completa sin espacios extra.",
+        };
+      }
+    }
+
+    let keypair: Keypair;
+    if (secretKeyBytes.length === 64) {
+      keypair = Keypair.fromSecretKey(secretKeyBytes);
+    } else if (secretKeyBytes.length === 32) {
+      keypair = Keypair.fromSeed(secretKeyBytes);
+    } else {
+      return {
+        valid: false,
+        error: `Longitud no válida (${secretKeyBytes.length} bytes). Se esperan 64 bytes (o seed de 32 bytes).`,
+      };
+    }
+
+    return {
+      valid: true,
+      publicKey: keypair.publicKey.toBase58(),
+      secretKeyBase58: bs58.encode(keypair.secretKey),
+    };
+  } catch (err: any) {
+    return {
+      valid: false,
+      error: err?.message || "No se pudo derivar el par de claves desde la clave privada provista.",
+    };
+  }
+}
+
+/**
+ * Guarda y activa una clave privada importada
+ */
+export function importBotKeypair(privateKeyInput: string): {
+  success: boolean;
+  data?: BotKeypairData;
+  error?: string;
+} {
+  const validation = validatePrivateKey(privateKeyInput);
+  if (!validation.valid || !validation.publicKey || !validation.secretKeyBase58) {
+    return { success: false, error: validation.error || "Clave privada inválida." };
+  }
+
+  const data: BotKeypairData = {
+    publicKey: validation.publicKey,
+    secretKeyBase58: validation.secretKeyBase58,
+  };
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT, { detail: data }));
+    }
+  } catch (e) {
+    console.error("Error saving imported bot keypair:", e);
+  }
+
+  return { success: true, data };
+}
+
+/**
+ * Regenera una nueva sub-wallet criptográfica
  */
 export function regenerateBotKeypair(): BotKeypairData {
   const newPair = Keypair.generate();
@@ -64,7 +165,14 @@ export function regenerateBotKeypair(): BotKeypairData {
     publicKey: newPair.publicKey.toBase58(),
     secretKeyBase58,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(WALLET_UPDATED_EVENT, { detail: data }));
+    }
+  } catch (e) {
+    console.error("Error saving regenerated bot keypair:", e);
+  }
   return data;
 }
 

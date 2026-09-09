@@ -33,23 +33,26 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Pass API calls directly to network (prices and transactions should be live)
-  if (event.request.url.includes('/api/')) {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(JSON.stringify({ error: 'offline', message: 'Sin conexión a internet' }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      })
-    );
+  const url = event.request.url;
+
+  // Pass-through for development, Vite scripts, APIs, and source modules
+  if (
+    event.request.method !== 'GET' ||
+    url.includes('/api/') ||
+    url.includes('/@') ||
+    url.includes('/src/') ||
+    url.includes('/node_modules/') ||
+    url.endsWith('.tsx') ||
+    url.endsWith('.ts')
+  ) {
     return;
   }
 
-  // Network first with cache fallback for app shell assets
+  // Network first for app shell
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response && response.status === 200 && event.request.method === 'GET') {
+        if (response && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);
@@ -57,6 +60,14 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        // Only return index.html for navigation requests
+        if (event.request.mode === 'navigate') {
+          return caches.match('/');
+        }
+        return new Response('Not found', { status: 404 });
+      })
   );
 });

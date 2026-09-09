@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { DexTransaction, CryptoSymbol, TokenPriceData } from "../types";
 import { exportTransactionsToCSV } from "../utils/csv";
+import { useLanguage } from "../utils/i18n";
 
 interface TransactionHistoryProps {
   transactions: DexTransaction[];
@@ -34,6 +35,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   isLoading,
   onRefreshTransactions,
 }) => {
+  const { t } = useLanguage();
   const [filterSymbol, setFilterSymbol] = useState<string>("ALL");
   const [filterType, setFilterType] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,17 +96,17 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-white tracking-tight">
-                  Historial de Operaciones del Bot
+                  {t("txHistoryTitle")}
                 </h3>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/40 font-semibold uppercase">
-                  Solo Órdenes del Bot
+                  {t("txHistoryBadge")}
                 </span>
                 <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                  {filteredTransactions.length} registros
+                  {filteredTransactions.length} {t("records")}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Registro exclusivo de compras iniciales y swaps automáticos ejecutados por el bot cuantitativo en Jupiter DEX
+                {t("txHistorySubtitle")}
               </p>
             </div>
           </div>
@@ -117,17 +119,17 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             onClick={handleExport}
             disabled={transactions.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md shadow-emerald-950/40 transition-colors"
-            title="Exportar operaciones del bot a archivo CSV para Excel/Sheets"
+            title={t("exportCsv")}
           >
             <Download className="w-4 h-4" />
-            <span>Exportar CSV del Bot</span>
+            <span>{t("exportCsv")}</span>
           </button>
 
           <button
             onClick={onRefreshTransactions}
             disabled={isLoading}
             className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50 transition-colors"
-            title="Actualizar registro del bot"
+            title="Refresh"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-cyan-400" : ""}`} />
           </button>
@@ -138,14 +140,14 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 text-xs">
         {/* Token Filter */}
         <div className="flex items-center gap-1.5">
-          <span className="text-slate-400 text-[11px] font-medium">Token:</span>
+          <span className="text-slate-400 text-[11px] font-medium">{t("tokenFilterLabel")}</span>
           <select
             id="token-filter-select"
             value={filterSymbol}
             onChange={(e) => setFilterSymbol(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 flex-1"
           >
-            <option value="ALL">Todos los Tokens</option>
+            <option value="ALL">{t("allTokens")}</option>
             <option value="SOL">SOL (Solana)</option>
             <option value="BTC">BTC (Bitcoin)</option>
             <option value="ETH">ETH (Ethereum)</option>
@@ -156,16 +158,16 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
 
         {/* Type Filter */}
         <div className="flex items-center gap-1.5">
-          <span className="text-slate-400 text-[11px] font-medium">Tipo de Orden:</span>
+          <span className="text-slate-400 text-[11px] font-medium">{t("orderTypeLabel")}</span>
           <select
             id="type-filter-select"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 flex-1"
           >
-            <option value="ALL">Todas las Operaciones del Bot</option>
-            <option value="INITIAL_BUY">Compras Iniciales (Descuento / Más Barata)</option>
-            <option value="ROTATION_SWAP">Swaps de Rotación (Arbitraje)</option>
+            <option value="ALL">{t("allBotOrders")}</option>
+            <option value="INITIAL_BUY">{t("initialBuysFilter")}</option>
+            <option value="ROTATION_SWAP">{t("rotationSwapsFilter")}</option>
           </select>
         </div>
 
@@ -176,7 +178,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar token, wallet o hash..."
+            placeholder={t("searchTxPlaceholder")}
             className="w-full bg-slate-900 border border-slate-700 rounded pl-8 pr-2 py-1 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
           />
         </div>
@@ -190,38 +192,38 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
           </div>
           <div>
             <h4 className="text-sm font-bold text-white mb-1">
-              El bot aún no ha ejecutado transacciones
+              {t("botNoTxTitle")}
             </h4>
             <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-              Para ver registros aquí, haz clic en <span className="text-emerald-400 font-semibold">"Compra Inicial"</span> en la estrategia o activa el interruptor <span className="text-cyan-400 font-semibold">"Bot Auto-Swap"</span>. Solo se mostrarán las operaciones ejecutadas por el bot.
+              {t("botNoTxDesc")}
             </p>
           </div>
           <button
             onClick={scrollToStrategy}
             className="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors shadow-lg shadow-cyan-950/50"
           >
-            <span>Ir a la Estrategia del Bot</span>
+            <span>{t("goToBotStrategy")}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       ) : filteredTransactions.length === 0 ? (
         <div className="py-8 text-center text-slate-400 text-xs bg-slate-950/40 rounded-lg border border-slate-800">
-          No hay operaciones del bot que coincidan con los filtros seleccionados.
+          {t("noTxMatchesFilter")}
         </div>
       ) : (
         <div className="overflow-x-auto border border-slate-800 rounded-lg">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-semibold">
-                <th className="py-2.5 px-3">Fecha y Hora</th>
-                <th className="py-2.5 px-3">Par / Ruta</th>
-                <th className="py-2.5 px-3">Tipo de Operación</th>
-                <th className="py-2.5 px-3 text-right">Precio Ref.</th>
-                <th className="py-2.5 px-3 text-right">Cantidad Origen</th>
-                <th className="py-2.5 px-3 text-right">Cantidad Destino</th>
-                <th className="py-2.5 px-3 text-right">Total USD</th>
-                <th className="py-2.5 px-3">Billetera / DEX</th>
-                <th className="py-2.5 px-3 text-center">Tx Hash</th>
+                <th className="py-2.5 px-3">{t("thTime")}</th>
+                <th className="py-2.5 px-3">{t("thPair")}</th>
+                <th className="py-2.5 px-3">{t("thType")}</th>
+                <th className="py-2.5 px-3 text-right">{t("thRefPrice")}</th>
+                <th className="py-2.5 px-3 text-right">{t("thAmountSource")}</th>
+                <th className="py-2.5 px-3 text-right">{t("thAmountTarget")}</th>
+                <th className="py-2.5 px-3 text-right">{t("thTotal")}</th>
+                <th className="py-2.5 px-3">{t("thWalletDex")}</th>
+                <th className="py-2.5 px-3 text-center">{t("thTxHash")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-mono">
@@ -235,7 +237,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                     className="hover:bg-slate-800/40 transition-colors text-slate-300"
                   >
                     <td className="py-2.5 px-3 whitespace-nowrap text-slate-400 font-sans text-[11px]">
-                      {new Date(tx.timestamp).toLocaleTimeString("es-ES", {
+                      {new Date(tx.timestamp).toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
                         second: "2-digit",
@@ -257,7 +259,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                         <div className="flex items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950/70 text-purple-300 border border-purple-800/50">
                             <ArrowRightLeft className="w-3 h-3 text-cyan-400" />
-                            SWAP ROTATIVO
+                            {t("filterRotationSwap")}
                           </span>
                           {tx.spreadPercent !== undefined && (
                             <span className="text-[10px] font-bold text-yellow-400 bg-yellow-950/50 border border-yellow-800/40 px-1.5 py-0.2 rounded">
@@ -268,7 +270,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/70 text-emerald-300 border border-emerald-800/50">
                           <ShoppingCart className="w-3 h-3 text-emerald-400" />
-                          COMPRA INICIAL
+                          {t("filterInitialBuy")}
                         </span>
                       )}
                     </td>
@@ -301,7 +303,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 underline font-mono"
-                        title="Ver en Solscan"
+                        title="Solscan"
                       >
                         <span>{tx.txHash.slice(0, 4)}...{tx.txHash.slice(-3)}</span>
                         <ExternalLink className="w-2.5 h-2.5" />

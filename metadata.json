@@ -1,6 +1,6 @@
 {
-  "name": "Pacharolo Island APP",
-  "description": "Pacharolo Island APP - Monitor de cotizaciones en tiempo real y rotación de criptomonedas con alertas y ejecución de estrategias.",
+  "name": "Pacharolo Island Bot",
+  "description": "Pacharolo Island Bot - Bot autónomo de rotación de cartera en Jupiter DEX (Solana) con monitor de cotizaciones en tiempo real y sub-wallet desatendida.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Pacharolo Island APP",
-  "short_name": "Pacharolo Island",
-  "description": "Pacharolo Island APP - Monitor de cotizaciones en tiempo real y rotación de criptomonedas.",
+  "name": "Pacharolo Island Bot",
+  "short_name": "Pacharolo Bot",
+  "description": "Pacharolo Island Bot - Bot autónomo de rotación de cartera en Jupiter DEX (Solana).",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -16,16 +16,24 @@ import {
   EyeOff,
   Send,
   Zap,
+  PlusCircle,
+  Download,
+  KeyRound,
+  CheckCircle2,
 } from "lucide-react";
 import {
   getOrCreateBotKeypair,
   regenerateBotKeypair,
+  importBotKeypair,
+  validatePrivateKey,
   fetchSolBalance,
   withdrawSolToMainWallet,
   DEFAULT_FEE_COLLECTOR,
   BotKeypairData,
+  WALLET_UPDATED_EVENT,
 } from "../utils/solanaBot";
 import { PlatformFeeConfig } from "../types";
+import { useLanguage } from "../utils/i18n";
 
 interface AutonomousBotWalletCardProps {
   solPriceUsd: number;
@@ -44,6 +52,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
   onUpdateFeeConfig,
   onKeypairLoaded,
 }) => {
+  const { t } = useLanguage();
   const [keypairData, setKeypairData] = useState<BotKeypairData>(() => getOrCreateBotKeypair());
   const [solBalance, setSolBalance] = useState<number>(0);
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
@@ -52,6 +61,13 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
   const [showQr, setShowQr] = useState<boolean>(false);
   const [showFeeConfig, setShowFeeConfig] = useState<boolean>(false);
   const [showWithdraw, setShowWithdraw] = useState<boolean>(false);
+
+  // New Wallet creation confirmation & Import states
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState<boolean>(false);
+  const [showImportPanel, setShowImportPanel] = useState<boolean>(false);
+  const [importKeyInput, setImportKeyInput] = useState<string>("");
+  const [importError, setImportError] = useState<string | null>(null);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
   // Withdraw state
   const [withdrawAddress, setWithdrawAddress] = useState<string>(DEFAULT_FEE_COLLECTOR);
@@ -65,6 +81,19 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     setKeypairData(kp);
     onKeypairLoaded(kp);
     refreshBalance(kp.publicKey);
+  }, []);
+
+  // Listen for wallet updates dispatched anywhere in the app
+  useEffect(() => {
+    const handleWalletUpdate = (e: any) => {
+      if (e.detail?.publicKey && e.detail?.secretKeyBase58) {
+        setKeypairData(e.detail);
+        onKeypairLoaded(e.detail);
+        refreshBalance(e.detail.publicKey);
+      }
+    };
+    window.addEventListener(WALLET_UPDATED_EVENT, handleWalletUpdate);
+    return () => window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdate);
   }, []);
 
   const refreshBalance = async (pubkey = keypairData.publicKey) => {
@@ -85,19 +114,39 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const handleRegenerate = () => {
-    if (
-      window.confirm(
-        "¿Estás seguro de que deseas generar una nueva sub-wallet? Asegúrate de haber retirado o respaldado los fondos de la dirección actual antes de continuar."
-      )
-    ) {
-      const newKp = regenerateBotKeypair();
-      setKeypairData(newKp);
-      onKeypairLoaded(newKp);
-      setSolBalance(0);
-      refreshBalance(newKp.publicKey);
-    }
+  const showNotification = (msg: string) => {
+    setActionSuccessMessage(msg);
+    setTimeout(() => setActionSuccessMessage(null), 4000);
   };
+
+  const handleConfirmRegenerate = () => {
+    const newKp = regenerateBotKeypair();
+    setKeypairData(newKp);
+    onKeypairLoaded(newKp);
+    setSolBalance(0);
+    setShowRegenerateConfirm(false);
+    showNotification(t("generateWalletSuccess"));
+    refreshBalance(newKp.publicKey);
+  };
+
+  const handleExecuteImport = () => {
+    setImportError(null);
+    const result = importBotKeypair(importKeyInput);
+    if (!result.success || !result.data) {
+      setImportError(result.error || "No se pudo importar la clave privada.");
+      return;
+    }
+
+    setKeypairData(result.data);
+    onKeypairLoaded(result.data);
+    setImportKeyInput("");
+    setShowImportPanel(false);
+    showNotification(t("importWalletSuccess"));
+    refreshBalance(result.data.publicKey);
+  };
+
+  // Real-time validation for imported key
+  const validationResult = importKeyInput.trim() ? validatePrivateKey(importKeyInput) : null;
 
   const handleWithdraw = async () => {
     if (!withdrawAddress || !withdrawAmount) {
@@ -148,13 +197,13 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white">Billetera Autónoma de Trading</h3>
+              <h3 className="text-sm font-bold text-white">{t("botTitle")}</h3>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/50 font-mono">
-                100% Desatendido
+                {t("botBadge")}
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Sub-wallet exclusiva para que el bot firme swaps en Jupiter DEX sin intervención manual
+              {t("botDesc")}
             </p>
           </div>
         </div>
@@ -170,7 +219,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            🧪 Modo Simulación
+            {t("paperMode")}
           </button>
           <button
             type="button"
@@ -182,7 +231,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
-            ⚡ Modo Real On-Chain
+            {t("liveMode")}
           </button>
         </div>
       </div>
@@ -193,7 +242,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
         <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400 font-medium flex items-center gap-1">
-              Dirección de Depósito (Solana):
+              {t("depositAddress")}:
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -203,7 +252,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
                 title="Mostrar código QR de depósito"
               >
                 <QrCode className="w-3.5 h-3.5" />
-                {showQr ? "Ocultar QR" : "Ver QR"}
+                {showQr ? t("hideQr") : t("showQr")}
               </button>
               <button
                 type="button"
@@ -212,11 +261,11 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               >
                 {copiedKey === "pub" ? (
                   <>
-                    <Check className="w-3 h-3 text-emerald-400" /> Copiado
+                    <Check className="w-3 h-3 text-emerald-400" /> {t("copied")}
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3 h-3 text-cyan-400" /> Copiar
+                    <Copy className="w-3 h-3 text-cyan-400" /> {t("copy")}
                   </>
                 )}
               </button>
@@ -235,20 +284,20 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
                 className="w-32 h-32"
               />
               <span className="text-[10px] text-slate-700 font-mono text-center">
-                Escanea desde Phantom / Solflare para depositar fondos al bot
+                {t("qrInstructions")}
               </span>
             </div>
           )}
 
           <p className="text-[11px] text-slate-400">
-            💡 Deposita aquí únicamente el capital con el que deseas que opere el bot (ej. 0.5 SOL o 50 USDC).
+            {t("depositHint")}
           </p>
         </div>
 
         {/* Balance & Status */}
         <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex flex-col justify-between space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-medium">Saldo en Sub-Wallet:</span>
+            <span className="text-slate-400 font-medium">{t("balanceInWallet")}:</span>
             <button
               type="button"
               onClick={() => refreshBalance()}
@@ -256,7 +305,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 disabled:opacity-50"
             >
               <RefreshCw className={`w-3 h-3 ${isLoadingBalance ? "animate-spin" : ""}`} />
-              Refrescar
+              {t("refresh")}
             </button>
           </div>
 
@@ -276,7 +325,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               className="flex-1 py-1.5 px-3 rounded bg-slate-900 hover:bg-slate-800 text-xs text-slate-200 font-semibold border border-slate-700 flex items-center justify-center gap-1.5 transition-colors"
             >
               <Send className="w-3.5 h-3.5 text-cyan-400" />
-              Retirar a Wallet Personal
+              {t("withdrawToPersonal")}
             </button>
             <button
               type="button"
@@ -285,7 +334,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               title="Información de Transparencia de Tarifas"
             >
               <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-              Tarifa: 0.20% (Info)
+              {t("feeInfoBtn")}
             </button>
           </div>
         </div>
@@ -297,23 +346,23 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
               <Send className="w-3.5 h-3.5 text-cyan-400" />
-              Retirar Fondos de la Sub-Wallet
+              {t("withdrawTitle")}
             </h4>
             <button
               type="button"
               onClick={() => setShowWithdraw(false)}
               className="text-xs text-slate-500 hover:text-white"
             >
-              ✕ Cerrar
+              ✕ {t("close")}
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="text-slate-400 block mb-1">Dirección de destino (tu Phantom/Solflare):</label>
+              <label className="text-slate-400 block mb-1">{t("destinationWallet")}</label>
               <input
                 type="text"
-                placeholder="Ingresa tu clave pública de Solana..."
+                placeholder="Solana address..."
                 value={withdrawAddress}
                 onChange={(e) => setWithdrawAddress(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
@@ -321,13 +370,13 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
             </div>
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-slate-400">Monto a retirar (SOL):</label>
+                <label className="text-slate-400">{t("amountToWithdraw")}</label>
                 <button
                   type="button"
                   onClick={() => setWithdrawAmount(Math.max(0, solBalance - 0.005).toFixed(4))}
                   className="text-[10px] text-cyan-400 hover:underline"
                 >
-                  Máximo ({Math.max(0, solBalance - 0.005).toFixed(4)})
+                  {t("max")} ({Math.max(0, solBalance - 0.005).toFixed(4)})
                 </button>
               </div>
               <input
@@ -354,7 +403,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               disabled={isWithdrawing || solBalance <= 0}
               className="px-4 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs disabled:opacity-50 transition-colors"
             >
-              {isWithdrawing ? "Procesando..." : "Confirmar Retiro Inmediato"}
+              {isWithdrawing ? t("processing") : t("confirmWithdraw")}
             </button>
           </div>
         </div>
@@ -370,10 +419,10 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               </div>
               <div>
                 <h4 className="font-bold text-white text-sm">
-                  Transparencia del Servicio y Tarifas
+                  {t("transparencyTitle")}
                 </h4>
                 <p className="text-[11px] text-slate-400">
-                  Modelo justo y abierto: Análisis gratuito + comisión por swap exitoso
+                  {t("transparencyDesc")}
                 </p>
               </div>
             </div>
@@ -382,7 +431,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               onClick={() => setShowFeeConfig(false)}
               className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded bg-slate-900"
             >
-              ✕ Cerrar
+              ✕ {t("close")}
             </button>
           </div>
 
@@ -391,10 +440,10 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
             <div className="p-3 rounded bg-slate-900/80 border border-slate-800 space-y-1.5">
               <div className="flex items-center gap-1.5 text-cyan-400 font-semibold">
                 <ShieldCheck className="w-4 h-4" />
-                <span>Datos y Cotizaciones: 100% Gratuitos</span>
+                <span>{t("dataFreeTitle")}</span>
               </div>
               <p className="text-slate-400 text-[11px] leading-relaxed">
-                El acceso a las cotizaciones en vivo de Jupiter DEX, gráficas de velas, comparativa de los 5 pares principales y simulación en papel (*Paper Trading*) es <strong>totalmente gratuito y sin límites</strong>.
+                {t("dataFreeDesc")}
               </p>
             </div>
 
@@ -403,14 +452,14 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               <div className="flex items-center justify-between">
                 <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
                   <Zap className="w-4 h-4" />
-                  Tarifa por Swap del Bot Autónomo:
+                  {t("feeSwapTitle")}:
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 font-mono font-bold">
                   0.20% (20 bps)
                 </span>
               </div>
               <p className="text-slate-400 text-[11px] leading-relaxed">
-                Al activar el bot autónomo, Jupiter DEX aplica una comisión transparente de <strong>0.20%</strong> sobre cada swap ejecutado con éxito. Solo se cobra si el bot genera una rotación con ganancia neta.
+                {t("feeSwapDesc")}
               </p>
             </div>
           </div>
@@ -418,39 +467,195 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
           <div className="p-2.5 rounded bg-slate-900/50 border border-slate-800 flex items-center justify-between text-slate-400 text-[11px]">
             <span className="flex items-center gap-1.5">
               <Check className="w-3.5 h-3.5 text-emerald-400" />
-              Tesorería del protocolo auditada y fijada contractualmente en la red de Solana
+              {t("auditedTreasury")}
             </span>
             <span className="font-mono text-emerald-400 font-semibold">
-              {platformFeeConfig.totalSwapsMonetized} rotaciones ejecutadas
+              {platformFeeConfig.totalSwapsMonetized} {t("swapsMonetizedCount")}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Action Success Toast */}
+      {actionSuccessMessage && (
+        <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center justify-between animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-semibold">{actionSuccessMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionSuccessMessage(null)}
+            className="text-emerald-400 hover:text-white text-xs px-2 py-0.5 rounded bg-emerald-900/60"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Dialog: Regenerate/Create New Wallet */}
+      {showRegenerateConfirm && (
+        <div className="bg-rose-950/40 p-3.5 rounded-xl border border-rose-800/60 space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="text-xs font-bold text-white">{t("confirmRegenerateTitle")}</h4>
+              <p className="text-[11px] text-rose-200 leading-relaxed">
+                {t("confirmRegenerateDesc")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowRegenerateConfirm(false)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmRegenerate}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-md transition-colors flex items-center gap-1.5"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              {t("confirmRegenerateBtn")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Import Private Key Panel */}
+      {showImportPanel && (
+        <div className="bg-slate-950 p-4 rounded-xl border border-cyan-700/60 space-y-3 animate-in fade-in duration-150 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-xs font-bold text-white">{t("importPrivateKey")}</h4>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowImportPanel(false);
+                setImportError(null);
+              }}
+              className="text-slate-500 hover:text-white text-xs px-2 py-0.5 rounded bg-slate-900"
+            >
+              ✕ {t("cancel")}
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            {t("importWalletDesc")}
+          </p>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-slate-300 block">
+              {t("enterPrivateKey")}
+            </label>
+            <textarea
+              rows={2}
+              value={importKeyInput}
+              onChange={(e) => {
+                setImportKeyInput(e.target.value);
+                setImportError(null);
+              }}
+              placeholder="Pega aquí tu clave privada Base58 (ej. 4vJUP... o array [12, 45, ...])"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-mono text-xs focus:outline-none focus:border-cyan-500 transition-colors resize-none placeholder-slate-600"
+            />
+          </div>
+
+          {/* Validation Feedback */}
+          {validationResult && (
+            <div
+              className={`p-2 rounded-lg text-xs flex items-center gap-2 ${
+                validationResult.valid
+                  ? "bg-emerald-950/60 border border-emerald-700/50 text-emerald-300"
+                  : "bg-rose-950/60 border border-rose-800/50 text-rose-300"
+              }`}
+            >
+              {validationResult.valid ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div className="truncate">
+                    <span className="font-semibold">✓ Clave válida.</span> Dirección:{" "}
+                    <span className="font-mono text-white">
+                      {validationResult.publicKey?.substring(0, 8)}...
+                      {validationResult.publicKey?.substring(validationResult.publicKey.length - 8)}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{validationResult.error}</span>
+                </>
+              )}
+            </div>
+          )}
+
+          {importError && (
+            <p className="text-xs text-rose-400 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {importError}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-slate-500 flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              {t("securityGuarantee")}
+            </span>
+            <button
+              type="button"
+              disabled={!validationResult?.valid}
+              onClick={handleExecuteImport}
+              className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-md transition-colors flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {t("confirmImport")}
+            </button>
           </div>
         </div>
       )}
 
       {/* Security & Private Key Export Bar */}
       <div className="flex flex-wrap items-center justify-between text-xs pt-1 text-slate-400 gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setShowPrivateKey(!showPrivateKey)}
-            className="text-slate-400 hover:text-amber-300 flex items-center gap-1 text-[11px]"
+            className="text-slate-400 hover:text-amber-300 flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-slate-800 transition-colors"
           >
             {showPrivateKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-            {showPrivateKey ? "Ocultar Clave Privada" : "Exportar Clave Privada (Base58)"}
+            {showPrivateKey ? t("hidePrivateKey") : t("exportPrivateKey")}
           </button>
           <span className="text-slate-700">•</span>
           <button
             type="button"
-            onClick={handleRegenerate}
-            className="text-slate-500 hover:text-rose-400 text-[11px]"
+            onClick={() => setShowRegenerateConfirm(true)}
+            className="text-slate-400 hover:text-rose-300 flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-slate-800 transition-colors"
           >
-            Regenerar Sub-Wallet
+            <PlusCircle className="w-3 h-3 text-rose-400" />
+            {t("createNewWallet")}
+          </button>
+          <span className="text-slate-700">•</span>
+          <button
+            type="button"
+            onClick={() => {
+              setShowImportPanel(!showImportPanel);
+              setImportError(null);
+            }}
+            className="text-slate-400 hover:text-cyan-300 flex items-center gap-1 text-[11px] px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+          >
+            <KeyRound className="w-3 h-3 text-cyan-400" />
+            {t("importPrivateKey")}
           </button>
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Firma local en cliente sin custodia de servidor</span>
+          <span>{t("securityGuarantee")}</span>
         </div>
       </div>
 
@@ -458,7 +663,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
         <div className="bg-amber-950/40 p-3 rounded-lg border border-amber-800/50 space-y-2">
           <div className="flex items-center justify-between text-xs text-amber-300 font-semibold">
             <span className="flex items-center gap-1">
-              <ShieldAlert className="w-3.5 h-3.5" /> Clave Privada de la Sub-Wallet:
+              <ShieldAlert className="w-3.5 h-3.5" /> Clave Privada (Secret Key):
             </span>
             <button
               type="button"
@@ -466,14 +671,14 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               className="text-[11px] text-amber-200 bg-amber-900/60 px-2 py-0.5 rounded border border-amber-700 flex items-center gap-1"
             >
               {copiedKey === "sec" ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              {copiedKey === "sec" ? "Copiada" : "Copiar Clave Privada"}
+              {copiedKey === "sec" ? t("copied") : t("copy")}
             </button>
           </div>
           <div className="font-mono text-xs text-amber-100 bg-slate-950 p-2 rounded border border-amber-900/50 break-all select-all">
             {keypairData.secretKeyBase58}
           </div>
           <p className="text-[10px] text-amber-400">
-            ⚠️ No compartas esta clave con nadie. Puedes importarla en Phantom o Solflare cuando quieras para tener acceso directo y control total de tus fondos.
+            {t("privateKeyWarning")}
           </p>
         </div>
       )}

@@ -13,8 +13,24 @@ import {
   Globe,
   Sliders,
   DollarSign,
+  KeyRound,
+  PlusCircle,
+  Download,
+  Eye,
+  EyeOff,
+  Sparkles,
+  RefreshCw,
+  Key,
 } from "lucide-react";
 import { WalletConfig } from "../types";
+import {
+  getOrCreateBotKeypair,
+  regenerateBotKeypair,
+  importBotKeypair,
+  validatePrivateKey,
+  BotKeypairData,
+  WALLET_UPDATED_EVENT,
+} from "../utils/solanaBot";
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -29,7 +45,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({
   walletConfig,
   onUpdateWalletConfig,
 }) => {
-  const [activeTab, setActiveTab] = useState<"connect" | "guide" | "python">("connect");
+  const [activeTab, setActiveTab] = useState<"connect" | "keys" | "guide" | "python">("connect");
   const [customAddress, setCustomAddress] = useState(walletConfig.address || "");
   const [selectedMode, setSelectedMode] = useState<"PAPER" | "REAL">(walletConfig.mode);
   const [paperBalance, setPaperBalance] = useState<number>(walletConfig.paperBalanceUsd || 500);
@@ -37,13 +53,93 @@ export const WalletModal: React.FC<WalletModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Key creation and import state
+  const [importKeyInput, setImportKeyInput] = useState("");
+  const [importKeyError, setImportKeyError] = useState<string | null>(null);
+  const [showImportSecret, setShowImportSecret] = useState(false);
+  const [createdKeyData, setCreatedKeyData] = useState<BotKeypairData | null>(null);
+  const [showCreatedSecret, setShowCreatedSecret] = useState(false);
+  const [copiedCreatedSecret, setCopiedCreatedSecret] = useState(false);
+
   useEffect(() => {
     setCustomAddress(walletConfig.address);
     setSelectedMode(walletConfig.mode);
     setPaperBalance(walletConfig.paperBalanceUsd || 500);
   }, [walletConfig, isOpen]);
 
+  // Listen to global wallet changes
+  useEffect(() => {
+    const handleWalletUpdated = (e: any) => {
+      if (e.detail?.publicKey) {
+        setCustomAddress(e.detail.publicKey);
+      }
+    };
+    window.addEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated);
+    return () => window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated);
+  }, []);
+
   if (!isOpen) return null;
+
+  // Real-time validation for imported key
+  const validationResult = importKeyInput.trim() ? validatePrivateKey(importKeyInput) : null;
+
+  const handleGenerateNewWallet = () => {
+    const newKp = regenerateBotKeypair();
+    setCreatedKeyData(newKp);
+    setCustomAddress(newKp.publicKey);
+    const updated: WalletConfig = {
+      mode: selectedMode,
+      address: newKp.publicKey,
+      providerName: "Solana Keypair (Creada)",
+      isConnected: true,
+      paperBalanceUsd: paperBalance,
+    };
+    onUpdateWalletConfig(updated);
+    setStatusMessage(
+      `✓ ¡Nueva wallet creada con éxito! Dirección: ${newKp.publicKey.substring(0, 6)}...${newKp.publicKey.substring(newKp.publicKey.length - 6)}`
+    );
+  };
+
+  const handleImportPrivateKey = () => {
+    setImportKeyError(null);
+    const res = importBotKeypair(importKeyInput);
+    if (!res.success || !res.data) {
+      setImportKeyError(res.error || "Clave privada inválida.");
+      return;
+    }
+
+    setCustomAddress(res.data.publicKey);
+    setCreatedKeyData(res.data);
+    const updated: WalletConfig = {
+      mode: selectedMode,
+      address: res.data.publicKey,
+      providerName: "Wallet Importada (Self-Custody)",
+      isConnected: true,
+      paperBalanceUsd: paperBalance,
+    };
+    onUpdateWalletConfig(updated);
+    setImportKeyInput("");
+    setStatusMessage(
+      `✓ ¡Wallet importada y activada con éxito! Dirección: ${res.data.publicKey.substring(0, 6)}...${res.data.publicKey.substring(res.data.publicKey.length - 6)}`
+    );
+  };
+
+  const handleSyncWithBotSubWallet = () => {
+    const currentBotKp = getOrCreateBotKeypair();
+    setCustomAddress(currentBotKp.publicKey);
+    setCreatedKeyData(currentBotKp);
+    const updated: WalletConfig = {
+      mode: selectedMode,
+      address: currentBotKp.publicKey,
+      providerName: "Sub-Wallet Bot",
+      isConnected: true,
+      paperBalanceUsd: paperBalance,
+    };
+    onUpdateWalletConfig(updated);
+    setStatusMessage(
+      `✓ Sincronizada con la sub-wallet del bot: ${currentBotKp.publicKey.substring(0, 6)}...${currentBotKp.publicKey.substring(currentBotKp.publicKey.length - 6)}`
+    );
+  };
 
   const hasJupiter =
     typeof window !== "undefined" &&
@@ -263,10 +359,10 @@ export const WalletModal: React.FC<WalletModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="px-6 pt-3 bg-slate-950/40 border-b border-slate-800 flex gap-2 text-xs">
+        <div className="px-6 pt-3 bg-slate-950/40 border-b border-slate-800 flex gap-2 text-xs overflow-x-auto">
           <button
             onClick={() => setActiveTab("connect")}
-            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === "connect"
                 ? "border-cyan-400 text-cyan-300"
                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -276,19 +372,33 @@ export const WalletModal: React.FC<WalletModalProps> = ({
             <span>Conectar y Modo</span>
           </button>
           <button
+            onClick={() => setActiveTab("keys")}
+            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === "keys"
+                ? "border-cyan-400 text-cyan-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Crear / Importar Wallet</span>
+            <span className="text-[9px] bg-cyan-950 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-800/60 font-mono">
+              NUEVO
+            </span>
+          </button>
+          <button
             onClick={() => setActiveTab("guide")}
-            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === "guide"
                 ? "border-cyan-400 text-cyan-300"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
             <Globe className="w-3.5 h-3.5" />
-            <span>Guía Paso a Paso (Phantom/Solana)</span>
+            <span>Guía Paso a Paso</span>
           </button>
           <button
             onClick={() => setActiveTab("python")}
-            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === "python"
                 ? "border-cyan-400 text-cyan-300"
                 : "border-transparent text-slate-400 hover:text-slate-200"
@@ -310,6 +420,37 @@ export const WalletModal: React.FC<WalletModalProps> = ({
 
           {activeTab === "connect" && (
             <div className="space-y-5">
+              {/* Quick Wallet Actions Banner */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-cyan-800/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-700/60 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">¿Crear nueva wallet o importar tus claves?</span>
+                    <span className="text-[11px] text-slate-400">Genera una nueva dirección Solana al instante o configura tu propia wallet con clave privada.</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleGenerateNewWallet}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow transition-colors flex items-center gap-1.5"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Crear Nueva</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("keys")}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-semibold text-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Importar Clave</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Mode Selection */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-200 uppercase tracking-wider block">
@@ -568,6 +709,242 @@ export const WalletModal: React.FC<WalletModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === "keys" && (
+            <div className="space-y-5">
+              {/* Active Wallet Status Banner */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Billetera Activa en la Aplicación
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/50">
+                    {walletConfig.mode === "REAL" ? "⚡ En Vivo (Mainnet)" : "🧪 Simulación"}
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <div className="font-mono text-xs text-white truncate max-w-md">
+                    {customAddress || "Ninguna billetera vinculada aún"}
+                  </div>
+                  {customAddress && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(customAddress)}
+                        className="px-2.5 py-1 rounded text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1 transition-colors"
+                      >
+                        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copied ? "Copiado" : "Copiar"}
+                      </button>
+                      <a
+                        href={`https://solscan.io/account/${customAddress}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 rounded text-xs bg-slate-800 hover:bg-slate-700 text-cyan-400 flex items-center gap-1 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Solscan
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* SECTION 1: Generate Brand New Wallet */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-cyan-800/60 space-y-3 shadow-lg">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-700/50 flex items-center justify-center text-cyan-400 shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">
+                        1. Crear Nueva Wallet Solana (1-Click)
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Genera un nuevo par criptográfico de Solana (Ed25519) generado 100% de forma local en tu navegador.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleGenerateNewWallet}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center gap-2"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    Generar Nueva Wallet Solana Ahora
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSyncWithBotSubWallet}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-colors flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+                    Usar Sub-Wallet Existente del Bot
+                  </button>
+                </div>
+
+                {/* Newly Created Keypair Details */}
+                {createdKeyData && (
+                  <div className="mt-3 p-3.5 rounded-xl bg-slate-900/90 border border-cyan-700/40 space-y-2.5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-xs text-cyan-300 font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Wallet Generada y Activa:
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Lista para Jupiter DEX
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-slate-400 font-medium">Dirección Pública (Public Key):</span>
+                      <div className="font-mono text-xs text-white bg-slate-950 p-2 rounded border border-slate-800 break-all select-all flex items-center justify-between gap-2">
+                        <span>{createdKeyData.publicKey}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(createdKeyData.publicKey)}
+                          className="text-[11px] text-cyan-400 hover:text-white shrink-0 px-2 py-0.5 rounded bg-slate-900 border border-slate-700"
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+                        <span>Clave Privada (Secret Key Base58):</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowCreatedSecret(!showCreatedSecret)}
+                            className="text-[11px] text-amber-300 hover:text-amber-200 flex items-center gap-1"
+                          >
+                            {showCreatedSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            {showCreatedSecret ? "Ocultar" : "Mostrar"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(createdKeyData.secretKeyBase58);
+                              setCopiedCreatedSecret(true);
+                              setTimeout(() => setCopiedCreatedSecret(false), 2000);
+                            }}
+                            className="text-[11px] text-amber-200 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60 flex items-center gap-1"
+                          >
+                            {copiedCreatedSecret ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            {copiedCreatedSecret ? "Copiado" : "Copiar Clave"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="font-mono text-xs text-amber-200 bg-slate-950 p-2 rounded border border-amber-900/40 break-all select-all">
+                        {showCreatedSecret ? createdKeyData.secretKeyBase58 : "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"}
+                      </div>
+                      <p className="text-[10px] text-amber-400/90 leading-tight">
+                        ⚠️ <strong>Importante:</strong> Guarda tu clave privada si planeas fondear esta billetera con SOL real. Puedes importarla en Phantom o Solflare en cualquier momento.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 2: Import Private Key */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-950 border border-indigo-700/50 flex items-center justify-center text-indigo-400 shrink-0">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">
+                      2. Configurar tu Propia Wallet (Importar Clave Privada)
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Importa una wallet que ya tengas (Phantom, Solflare, Jupiter o Solana CLI) pegando su clave privada.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      Clave Privada (Base58 de 64 o 32 bytes, o array JSON):
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowImportSecret(!showImportSecret)}
+                      className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1"
+                    >
+                      {showImportSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      {showImportSecret ? "Ocultar" : "Mostrar"}
+                    </button>
+                  </div>
+
+                  <input
+                    type={showImportSecret ? "text" : "password"}
+                    value={importKeyInput}
+                    onChange={(e) => {
+                      setImportKeyInput(e.target.value);
+                      setImportKeyError(null);
+                    }}
+                    placeholder="Pega aquí la clave privada (ej. 4vJUP... o [12, 45, ...])"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                </div>
+
+                {/* Validation Preview */}
+                {validationResult && (
+                  <div
+                    className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                      validationResult.valid
+                        ? "bg-emerald-950/60 border border-emerald-700/50 text-emerald-300"
+                        : "bg-rose-950/60 border border-rose-800/50 text-rose-300"
+                    }`}
+                  >
+                    {validationResult.valid ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div className="truncate">
+                          <span className="font-semibold">✓ Clave válida detectada.</span> Dirección pública derivada:{" "}
+                          <span className="font-mono text-white font-bold">{validationResult.publicKey}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{validationResult.error}</span>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {importKeyError && (
+                  <p className="text-xs text-rose-400 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    {importKeyError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    Procesado exclusivamente en tu navegador (0 servidores)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!validationResult?.valid}
+                    onClick={handleImportPrivateKey}
+                    className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-bold text-xs shadow-md transition-colors flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Activar e Importar Billetera
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

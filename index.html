@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Pacharolo Island APP</title>
-    <meta name="description" content="Pacharolo Island APP - Monitor de cotizaciones en tiempo real y rotación de criptomonedas." />
-    <meta property="og:title" content="Pacharolo Island APP" />
-    <meta property="og:description" content="Pacharolo Island APP - Monitor de cotizaciones en tiempo real y rotación de criptomonedas." />
+    <title>Pacharolo Island Bot</title>
+    <meta name="description" content="Pacharolo Island Bot - Bot autónomo de rotación de cartera en Jupiter DEX (Solana) con monitor de cotizaciones en tiempo real y sub-wallet desatendida." />
+    <meta property="og:title" content="Pacharolo Island Bot" />
+    <meta property="og:description" content="Pacharolo Island Bot - Bot autónomo de rotación de cartera en Jupiter DEX (Solana) con monitor de cotizaciones en tiempo real y sub-wallet desatendida." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
 
@@ -20,12 +20,23 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
-      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.log('SW registration note:', err);
+      // Prevent service worker issues in iframe preview environments
+      if ('serviceWorker' in navigator) {
+        const isIframe = window.self !== window.top;
+        if (isIframe) {
+          // Unregister any conflicting service worker inside preview iframes
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+              registration.unregister();
+            }
           });
-        });
+        } else if (window.location.protocol.startsWith('http')) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch((err) => {
+              console.log('SW registration note:', err);
+            });
+          });
+        }
       }
     </script>
   </head>

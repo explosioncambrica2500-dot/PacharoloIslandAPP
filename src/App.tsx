@@ -16,8 +16,10 @@ import { NotificationToast } from "./components/NotificationToast";
 import { RotationStrategyPanel } from "./components/RotationStrategyPanel";
 import { WalletModal } from "./components/WalletModal";
 import { AndroidApkModal } from "./components/AndroidApkModal";
+import { LanguageProvider } from "./utils/i18n";
 import { soundEngine } from "./utils/audio";
 import { fetchLivePricesDirect } from "./utils/priceFeed";
+import { getOrCreateBotKeypair, WALLET_UPDATED_EVENT } from "./utils/solanaBot";
 import {
   Activity,
   Layers,
@@ -90,7 +92,7 @@ const DEFAULT_TOKENS: Record<CryptoSymbol, TokenPriceData> = {
   },
 };
 
-export default function App() {
+function MainApp() {
   const [tokens, setTokens] = useState<Record<CryptoSymbol, TokenPriceData>>(DEFAULT_TOKENS);
   const tokensRef = useRef(tokens);
   useEffect(() => {
@@ -108,11 +110,33 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
 
+  // Master alerts enable/disable state
+  const [alertsEnabled, setAlertsEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("jupiter_alerts_enabled");
+      if (saved !== null) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Could not load alerts_enabled from localStorage", e);
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("jupiter_alerts_enabled", JSON.stringify(alertsEnabled));
+    } catch (e) {
+      console.warn("Could not save alerts_enabled to localStorage", e);
+    }
+  }, [alertsEnabled]);
+
   // Alert rules state with local persistence
   const [alerts, setAlerts] = useState<AlertRule[]>(() => {
     try {
       const saved = localStorage.getItem("jupiter_alerts");
-      if (saved) return JSON.parse(saved);
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      }
     } catch (e) {
       console.warn("Could not load alerts from localStorage", e);
     }
@@ -161,14 +185,25 @@ export default function App() {
   const [walletConfig, setWalletConfig] = useState<WalletConfig>(() => {
     try {
       const saved = localStorage.getItem("jupiter_wallet_config");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!parsed.address) {
+          const defaultKp = getOrCreateBotKeypair();
+          parsed.address = defaultKp.publicKey;
+          parsed.isConnected = true;
+          parsed.providerName = "Solana Sub-Wallet";
+        }
+        return parsed;
+      }
     } catch (e) {
       console.warn("Failed loading wallet config", e);
     }
+    const defaultKp = getOrCreateBotKeypair();
     return {
       mode: "PAPER",
-      address: "",
-      isConnected: false,
+      address: defaultKp.publicKey,
+      isConnected: true,
+      providerName: "Solana Sub-Wallet",
       paperBalanceUsd: 500,
     };
   });
@@ -181,6 +216,22 @@ export default function App() {
       console.warn("Failed saving wallet config", e);
     }
   }, [walletConfig]);
+
+  // Synchronize state when wallet is regenerated or imported anywhere
+  useEffect(() => {
+    const handleWalletUpdated = (e: any) => {
+      if (e.detail?.publicKey) {
+        setWalletConfig((prev) => ({
+          ...prev,
+          address: e.detail.publicKey,
+          isConnected: true,
+          providerName: prev.providerName || "Solana Wallet",
+        }));
+      }
+    };
+    window.addEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated);
+    return () => window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated);
+  }, []);
 
   // DEX Transactions feed initialized with localStorage fallback for static hosts like Netlify
   const [transactions, setTransactions] = useState<DexTransaction[]>(() => {
@@ -243,8 +294,11 @@ export default function App() {
   // Evaluate price alerts whenever tokens update
   const checkThresholdAlerts = useCallback(
     (currentPrices: Record<CryptoSymbol, TokenPriceData>) => {
+      if (!alertsEnabled) return;
+      if (!alerts || alerts.length === 0) return;
+
       alerts.forEach((alert) => {
-        if (!alert.isActive) return;
+        if (!alert || !alert.isActive) return;
         const token = currentPrices[alert.symbol];
         if (!token) return;
 
@@ -510,12 +564,58 @@ export default function App() {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const handleClearAllAlerts = () => {
+    setAlerts([]);
+    setActiveToasts([]);
+    try {
+      localStorage.setItem("jupiter_alerts", JSON.stringify([]));
+    } catch (e) {
+      console.warn("Could not save empty alerts to localStorage", e);
+    }
+  };
+
+  const handleRestoreDefaultAlerts = () => {
+    const defaults: AlertRule[] = [
+      {
+        id: `alert_sol_${Date.now()}`,
+        symbol: "SOL",
+        condition: "ABOVE",
+        targetPrice: Number(((tokens.SOL?.usdPrice || 100) * 1.05).toFixed(2)),
+        createdAt: new Date().toISOString(),
+        isActive: true,
+        notes: "Objetivo de resistencia",
+        triggeredCount: 0,
+      },
+      {
+        id: `alert_btc_${Date.now()}`,
+        symbol: "BTC",
+        condition: "ABOVE",
+        targetPrice: Number(((tokens.BTC?.usdPrice || 70000) * 1.05).toFixed(0)),
+        createdAt: new Date().toISOString(),
+        isActive: true,
+        notes: "Ruptura psicológica",
+        triggeredCount: 0,
+      },
+    ];
+    setAlerts(defaults);
+  };
+
+  const handleToggleAlertsEnabled = () => {
+    setAlertsEnabled((prev) => {
+      const next = !prev;
+      if (!next) {
+        setActiveToasts([]);
+      }
+      return next;
+    });
+  };
+
   const handleOpenAlertForToken = (token: TokenPriceData) => {
     setAlertModalSymbol(token.symbol);
     setIsAlertModalOpen(true);
   };
 
-  const activeAlertsCount = alerts.filter((a) => a.isActive).length;
+  const activeAlertsCount = alertsEnabled ? alerts.filter((a) => a.isActive).length : 0;
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
 
   const currentSelectedToken = tokens[selectedSymbol] || tokens.SOL;
@@ -537,6 +637,7 @@ export default function App() {
           setAlertModalSymbol(selectedSymbol);
           setIsAlertModalOpen(true);
         }}
+        alertsEnabled={alertsEnabled}
         soundEnabled={soundEnabled}
         onToggleSound={() => {
           const next = !soundEnabled;
@@ -650,6 +751,10 @@ export default function App() {
         onAddAlert={handleAddAlert}
         onToggleAlert={handleToggleAlert}
         onDeleteAlert={handleDeleteAlert}
+        onDeleteAllAlerts={handleClearAllAlerts}
+        onRestoreDefaultAlerts={handleRestoreDefaultAlerts}
+        alertsEnabled={alertsEnabled}
+        onToggleAlertsEnabled={handleToggleAlertsEnabled}
         notifications={notifications}
         onClearNotifications={() => setNotifications([])}
         onTestSound={() => soundEngine.playAlertChime("high")}
@@ -676,5 +781,13 @@ export default function App() {
         onClose={() => setIsAndroidModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <MainApp />
+    </LanguageProvider>
   );
 }

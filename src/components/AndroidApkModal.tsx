@@ -11,6 +11,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { IslandCastleLogo } from './IslandCastleLogo';
+import { useLanguage } from '../utils/i18n';
 
 interface AndroidApkModalProps {
   isOpen: boolean;
@@ -18,6 +20,7 @@ interface AndroidApkModalProps {
 }
 
 export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useLanguage();
   const { isInstallable, isInstalled, install } = usePWAInstall();
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -37,18 +40,20 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/95">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Smartphone className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-cyan-500 via-emerald-400 to-amber-300 p-0.5 shadow-md flex items-center justify-center shrink-0">
+              <div className="w-full h-full rounded-[10px] overflow-hidden bg-slate-950 flex items-center justify-center">
+                <IslandCastleLogo size={42} className="w-full h-full object-cover" />
+              </div>
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                Descargar para Android
+                {t("androidModalTitle")}
                 <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
                   Android
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Pacharolo Island APP en tu teléfono móvil
+                {t("androidModalSubtitle")}
               </p>
             </div>
           </div>
@@ -67,9 +72,9 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
             <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-950/40 border border-emerald-600/40 text-emerald-300">
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               <div>
-                <p className="font-semibold text-white">¡Aplicación ya instalada!</p>
+                <p className="font-semibold text-white">{t("appInstalled")}</p>
                 <p className="text-xs text-emerald-400/80">
-                  Pacharolo Island APP está funcionando en modo nativo en este dispositivo.
+                  {t("appInstalledDesc")}
                 </p>
               </div>
             </div>
@@ -78,10 +83,10 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
               <div>
                 <h4 className="font-bold text-white text-sm sm:text-base flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-emerald-400" />
-                  Instalar en 1 toque en este dispositivo
+                  {t("install1Click")}
                 </h4>
                 <p className="text-xs text-emerald-200/80">
-                  Agrega el icono oficial a tu pantalla de inicio
+                  {t("install1ClickDesc")}
                 </p>
               </div>
               <button
@@ -89,7 +94,7 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
                 className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition active:scale-95"
               >
                 <Download className="w-4 h-4" />
-                Instalar Ahora
+                {t("installNow")}
               </button>
             </div>
           ) : null}
@@ -99,11 +104,11 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
             <div className="flex items-center justify-between">
               <h4 className="font-semibold text-white text-xs sm:text-sm flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-emerald-400" />
-                Enlace para descargar / abrir en Android
+                {t("linkForAndroid")}
               </h4>
             </div>
             <p className="text-xs text-slate-400">
-              Abre o comparte este enlace en tu teléfono móvil Android:
+              {t("openOrShareDesc")}
             </p>
 
             <div className="flex items-center gap-2">
@@ -118,7 +123,7 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
                 className="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition"
               >
                 {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedUrl ? 'Copiado' : 'Copiar enlace'}</span>
+                <span>{copiedUrl ? t("linkCopied") : t("copyLink")}</span>
               </button>
             </div>
           </div>
@@ -137,10 +142,10 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
             <div className="space-y-2 text-xs flex-1 text-center sm:text-left">
               <p className="font-semibold text-white flex items-center justify-center sm:justify-start gap-1.5">
                 <QrCode className="w-4 h-4 text-emerald-400" />
-                Escanea con la cámara de tu Android
+                {t("scanQrAndroid")}
               </p>
               <p className="text-slate-400 leading-relaxed">
-                Apunta con la cámara de tu móvil para abrir la aplicación directamente en Chrome o Brave sin tener que escribir la dirección.
+                {t("scanQrDesc")}
               </p>
               <a
                 href={currentUrl}
@@ -148,30 +153,22 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-medium pt-1"
               >
-                <span>Abrir enlace directamente</span>
+                <span>{t("openDirectly")}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           </div>
 
-          {/* 3 Simple Steps */}
+          {/* Simple Steps */}
           <div className="rounded-xl bg-slate-950/50 border border-slate-800/80 p-4 space-y-2.5 text-xs">
             <h4 className="font-semibold text-white text-xs sm:text-sm">
-              Pasos para instalar en Android:
+              {t("stepsInstallAndroid")}
             </h4>
             <ol className="list-decimal list-inside space-y-2 text-slate-300 pl-1 leading-relaxed">
-              <li>
-                Abre el enlace en <strong>Google Chrome</strong> o <strong>Brave</strong> en tu teléfono.
-              </li>
-              <li>
-                Toca el botón de opciones del navegador <span className="px-1.5 py-0.5 rounded bg-slate-800 text-white font-mono font-bold">⋮</span> (arriba a la derecha).
-              </li>
-              <li>
-                Selecciona <strong>"Instalar aplicación"</strong> (o <strong>"Agregar a la pantalla principal"</strong>).
-              </li>
-              <li>
-                ¡Listo! Se agregará el icono de <strong>Pacharolo Island APP</strong> en tu pantalla de inicio y se abrirá a pantalla completa.
-              </li>
+              <li>{t("step1Chrome")}</li>
+              <li>{t("step2Menu")}</li>
+              <li>{t("step3Install")}</li>
+              <li>{t("step4Done")}</li>
             </ol>
           </div>
         </div>
@@ -180,13 +177,13 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
         <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/95 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2 text-emerald-400">
             <CheckCircle2 className="w-4 h-4" />
-            <span>Pacharolo Island APP para Android</span>
+            <span>{t("appForAndroidFooter")}</span>
           </div>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition font-medium"
           >
-            Cerrar
+            {t("closeModal")}
           </button>
         </div>
       </div>
