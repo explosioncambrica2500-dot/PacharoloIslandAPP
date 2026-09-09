@@ -159,19 +159,20 @@ export const WalletModal: React.FC<WalletModalProps> = ({
         (window as any)?.jupiterWallet;
 
       if (!provider) {
-        // Modo amigable para iframe preview o usuarios sin extensión instalada
-        const demoKey = "Jup4d13nTYyWvGjXGsmD24hQZ9v8bCq9Q5N4vJUPITER";
+        // Usar la keypair de Solana local generada
+        const currentKp = getOrCreateBotKeypair();
+        const activeKey = currentKp.publicKey;
         const updated: WalletConfig = {
           mode: selectedMode,
-          address: demoKey,
-          providerName: "Jupiter Wallet",
+          address: activeKey,
+          providerName: "Jupiter DEX Wallet",
           isConnected: true,
           paperBalanceUsd: paperBalance,
         };
         onUpdateWalletConfig(updated);
-        setCustomAddress(demoKey);
+        setCustomAddress(activeKey);
         setStatusMessage(
-          "✓ Conectado en modo Jupiter Wallet (Nativa de Jupiter DEX). Si deseas instalar la extensión oficial para navegador o móvil, puedes obtenerla en jup.ag/wallet."
+          `✓ Conectado con dirección Solana: ${activeKey.substring(0, 4)}...${activeKey.substring(activeKey.length - 4)}. Operando en Jupiter DEX.`
         );
         return;
       }
@@ -205,17 +206,17 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     try {
       const provider = (window as any).solana;
       if (!provider || !provider.isPhantom) {
-        const demoKey = "Phantom7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg";
+        const activeKey = getOrCreateBotKeypair().publicKey;
         const updated: WalletConfig = {
           mode: selectedMode,
-          address: demoKey,
+          address: activeKey,
           providerName: "Phantom",
           isConnected: true,
           paperBalanceUsd: paperBalance,
         };
         onUpdateWalletConfig(updated);
-        setCustomAddress(demoKey);
-        setStatusMessage("✓ Conectado en modo Phantom Wallet.");
+        setCustomAddress(activeKey);
+        setStatusMessage(`✓ Conectado en modo Phantom Wallet (${activeKey.substring(0, 4)}...${activeKey.substring(activeKey.length - 4)}).`);
         return;
       }
 
@@ -245,17 +246,17 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     try {
       const provider = (window as any)?.solflare;
       if (!provider) {
-        const demoKey = "Solflare9B5XszUGdMaxCZ7uSQhPzdks53QKEQ26A4D98VPLF";
+        const activeKey = getOrCreateBotKeypair().publicKey;
         const updated: WalletConfig = {
           mode: selectedMode,
-          address: demoKey,
+          address: activeKey,
           providerName: "Solflare",
           isConnected: true,
           paperBalanceUsd: paperBalance,
         };
         onUpdateWalletConfig(updated);
-        setCustomAddress(demoKey);
-        setStatusMessage("✓ Conectado en modo Solflare Wallet.");
+        setCustomAddress(activeKey);
+        setStatusMessage(`✓ Conectado en modo Solflare Wallet (${activeKey.substring(0, 4)}...${activeKey.substring(activeKey.length - 4)}).`);
         return;
       }
 

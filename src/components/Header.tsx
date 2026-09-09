@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Activity,
-  Bell,
-  BellOff,
   RefreshCw,
   Volume2,
   VolumeX,
@@ -26,10 +24,6 @@ interface HeaderProps {
   onManualRefresh: () => void;
   isRefreshing: boolean;
   lastUpdated: string | null;
-  activeAlertsCount: number;
-  unreadNotificationsCount: number;
-  onOpenAlerts: () => void;
-  alertsEnabled?: boolean;
   soundEnabled: boolean;
   onToggleSound: () => void;
   browserNotificationsEnabled: boolean;
@@ -48,10 +42,6 @@ export const Header: React.FC<HeaderProps> = ({
   onManualRefresh,
   isRefreshing,
   lastUpdated,
-  activeAlertsCount,
-  unreadNotificationsCount,
-  onOpenAlerts,
-  alertsEnabled = true,
   soundEnabled,
   onToggleSound,
   browserNotificationsEnabled,
@@ -259,8 +249,8 @@ export const Header: React.FC<HeaderProps> = ({
               <Wallet className={`w-3.5 h-3.5 ${walletConfig.isConnected ? "text-emerald-400" : "text-cyan-400"}`} />
             )}
             <span className="hidden sm:inline">
-              {walletConfig.isConnected
-                ? `${walletConfig.providerName ? walletConfig.providerName + ": " : ""}${walletConfig.address.substring(0, 4)}...${walletConfig.address.substring(walletConfig.address.length - 4)}`
+              {walletConfig.isConnected && walletConfig.address
+                ? `${walletConfig.address.substring(0, 4)}...${walletConfig.address.substring(walletConfig.address.length - 4)}`
                 : t("walletConfig")}
             </span>
             <span
@@ -283,37 +273,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
             <span className="hidden sm:inline">{t("downloadAndroid")}</span>
-          </button>
-
-          {/* Alert Panel Trigger */}
-          <button
-            id="open-alerts-button"
-            onClick={onOpenAlerts}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors ${
-              alertsEnabled
-                ? "bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-200"
-                : "bg-slate-900/50 border-slate-800/60 text-slate-400 hover:border-slate-700"
-            }`}
-            title={alertsEnabled ? t("alerts") : "Alertas Silenciadas (Desactivadas)"}
-          >
-            {alertsEnabled ? (
-              <Bell className="w-4 h-4 text-amber-400" />
-            ) : (
-              <BellOff className="w-4 h-4 text-slate-500" />
-            )}
-            <span className="hidden sm:inline font-medium">{t("alerts")}</span>
-            {!alertsEnabled ? (
-              <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-slate-800 text-slate-400">
-                Off
-              </span>
-            ) : activeAlertsCount > 0 ? (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
-                {activeAlertsCount}
-              </span>
-            ) : null}
-            {unreadNotificationsCount > 0 && alertsEnabled && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse ring-2 ring-slate-950" />
-            )}
           </button>
         </div>
       </div>

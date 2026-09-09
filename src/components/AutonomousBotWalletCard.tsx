@@ -32,7 +32,7 @@ import {
   BotKeypairData,
   WALLET_UPDATED_EVENT,
 } from "../utils/solanaBot";
-import { PlatformFeeConfig } from "../types";
+import { PlatformFeeConfig, WalletConfig } from "../types";
 import { useLanguage } from "../utils/i18n";
 
 interface AutonomousBotWalletCardProps {
@@ -41,7 +41,8 @@ interface AutonomousBotWalletCardProps {
   onChangeLiveMode: (isLive: boolean) => void;
   platformFeeConfig: PlatformFeeConfig;
   onUpdateFeeConfig: (config: PlatformFeeConfig) => void;
-  onKeypairLoaded: (keypair: BotKeypairData) => void;
+  onKeypairLoaded?: (keypair: BotKeypairData) => void;
+  onUpdateWalletConfig?: (config: WalletConfig) => void;
 }
 
 export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = ({
@@ -51,6 +52,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
   platformFeeConfig,
   onUpdateFeeConfig,
   onKeypairLoaded,
+  onUpdateWalletConfig,
 }) => {
   const { t } = useLanguage();
   const [keypairData, setKeypairData] = useState<BotKeypairData>(() => getOrCreateBotKeypair());
@@ -127,6 +129,15 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     setShowRegenerateConfirm(false);
     showNotification(t("generateWalletSuccess"));
     refreshBalance(newKp.publicKey);
+    if (onUpdateWalletConfig) {
+      onUpdateWalletConfig({
+        mode: isLiveOnChain ? "REAL" : "PAPER",
+        address: newKp.publicKey,
+        providerName: "Solana Wallet",
+        isConnected: true,
+        paperBalanceUsd: 500,
+      });
+    }
   };
 
   const handleExecuteImport = () => {
@@ -143,6 +154,15 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     setShowImportPanel(false);
     showNotification(t("importWalletSuccess"));
     refreshBalance(result.data.publicKey);
+    if (onUpdateWalletConfig) {
+      onUpdateWalletConfig({
+        mode: isLiveOnChain ? "REAL" : "PAPER",
+        address: result.data.publicKey,
+        providerName: "Solana Wallet",
+        isConnected: true,
+        paperBalanceUsd: 500,
+      });
+    }
   };
 
   // Real-time validation for imported key

@@ -2,17 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   CryptoSymbol,
   TokenPriceData,
-  AlertRule,
-  TriggeredAlertNotification,
   DexTransaction,
   WalletConfig,
 } from "./types";
 import { Header } from "./components/Header";
 import { TokenCard } from "./components/TokenCard";
 import { PriceChart } from "./components/PriceChart";
-import { AlertManager } from "./components/AlertManager";
 import { TransactionHistory } from "./components/TransactionHistory";
-import { NotificationToast } from "./components/NotificationToast";
 import { RotationStrategyPanel } from "./components/RotationStrategyPanel";
 import { WalletModal } from "./components/WalletModal";
 import { AndroidApkModal } from "./components/AndroidApkModal";
@@ -22,10 +18,7 @@ import { fetchLivePricesDirect } from "./utils/priceFeed";
 import { getOrCreateBotKeypair, WALLET_UPDATED_EVENT } from "./utils/solanaBot";
 import {
   Activity,
-  Layers,
-  ShieldCheck,
   Zap,
-  Info,
   ExternalLink,
 } from "lucide-react";
 
@@ -100,95 +93,33 @@ function MainApp() {
   }, [tokens]);
 
   const [selectedSymbol, setSelectedSymbol] = useState<CryptoSymbol>("SOL");
-  const [pollInterval, setPollInterval] = useState<number>(2000); // 2s by default for low latency
+  const [pollInterval, setPollInterval] = useState<number>(2000); // 2s by default
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number>(85);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Sound and alert preferences
+  // Sound preferences
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
 
-  // Master alerts enable/disable state
-  const [alertsEnabled, setAlertsEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("jupiter_alerts_enabled");
-      if (saved !== null) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("Could not load alerts_enabled from localStorage", e);
-    }
-    return true;
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("jupiter_alerts_enabled", JSON.stringify(alertsEnabled));
-    } catch (e) {
-      console.warn("Could not save alerts_enabled to localStorage", e);
-    }
-  }, [alertsEnabled]);
-
-  // Alert rules state with local persistence
-  const [alerts, setAlerts] = useState<AlertRule[]>(() => {
-    try {
-      const saved = localStorage.getItem("jupiter_alerts");
-      if (saved !== null) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed.filter(Boolean);
-      }
-    } catch (e) {
-      console.warn("Could not load alerts from localStorage", e);
-    }
-    return [
-      {
-        id: "alert_sol_default",
-        symbol: "SOL",
-        condition: "ABOVE",
-        targetPrice: 110.0,
-        createdAt: new Date().toISOString(),
-        isActive: true,
-        notes: "Objetivo de resistencia",
-        triggeredCount: 0,
-      },
-      {
-        id: "alert_btc_default",
-        symbol: "BTC",
-        condition: "ABOVE",
-        targetPrice: 80000.0,
-        createdAt: new Date().toISOString(),
-        isActive: true,
-        notes: "Ruptura psicológica",
-        triggeredCount: 0,
-      },
-    ];
-  });
-
-  // Triggered notifications log
-  const [notifications, setNotifications] = useState<TriggeredAlertNotification[]>(() => {
-    try {
-      const saved = localStorage.getItem("jupiter_notifications");
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("Could not load notifications from localStorage", e);
-    }
-    return [];
-  });
-
-  const [activeToasts, setActiveToasts] = useState<TriggeredAlertNotification[]>([]);
-  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
-  const [alertModalSymbol, setAlertModalSymbol] = useState<CryptoSymbol>("SOL");
 
-  // Wallet configuration state (Paper vs Real)
+  // Wallet configuration state (Paper vs Real) - synchronized with real Solana keypair
   const [walletConfig, setWalletConfig] = useState<WalletConfig>(() => {
+    const defaultKp = getOrCreateBotKeypair();
     try {
       const saved = localStorage.getItem("jupiter_wallet_config");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (!parsed.address) {
-          const defaultKp = getOrCreateBotKeypair();
+        // Si tiene la clave dummy anterior "Jup4..." o está vacía, reemplazar con la clave real del bot
+        if (
+          !parsed.address ||
+          parsed.address.includes("Jup4") ||
+          parsed.address.includes("Phantom7x") ||
+          parsed.address.includes("Solflare9B")
+        ) {
           parsed.address = defaultKp.publicKey;
           parsed.isConnected = true;
           parsed.providerName = "Solana Sub-Wallet";
@@ -198,7 +129,6 @@ function MainApp() {
     } catch (e) {
       console.warn("Failed loading wallet config", e);
     }
-    const defaultKp = getOrCreateBotKeypair();
     return {
       mode: "PAPER",
       address: defaultKp.publicKey,
@@ -233,7 +163,7 @@ function MainApp() {
     return () => window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated);
   }, []);
 
-  // DEX Transactions feed initialized with localStorage fallback for static hosts like Netlify
+  // DEX Transactions feed initialized with localStorage fallback
   const [transactions, setTransactions] = useState<DexTransaction[]>(() => {
     try {
       const saved = localStorage.getItem("jupiter_transactions");
@@ -254,24 +184,6 @@ function MainApp() {
     }
   }, [transactions]);
 
-  // Save alerts to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("jupiter_alerts", JSON.stringify(alerts));
-    } catch (e) {
-      console.warn("Failed saving alerts", e);
-    }
-  }, [alerts]);
-
-  // Save notifications to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("jupiter_notifications", JSON.stringify(notifications));
-    } catch (e) {
-      console.warn("Failed saving notifications", e);
-    }
-  }, [notifications]);
-
   // Check browser notification permission status on mount
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -291,80 +203,7 @@ function MainApp() {
     }
   };
 
-  // Evaluate price alerts whenever tokens update
-  const checkThresholdAlerts = useCallback(
-    (currentPrices: Record<CryptoSymbol, TokenPriceData>) => {
-      if (!alertsEnabled) return;
-      if (!alerts || alerts.length === 0) return;
-
-      alerts.forEach((alert) => {
-        if (!alert || !alert.isActive) return;
-        const token = currentPrices[alert.symbol];
-        if (!token) return;
-
-        const currentPrice = token.usdPrice;
-        let isTriggered = false;
-
-        if (alert.condition === "ABOVE" && currentPrice >= alert.targetPrice) {
-          isTriggered = true;
-        } else if (alert.condition === "BELOW" && currentPrice <= alert.targetPrice) {
-          isTriggered = true;
-        }
-
-        if (isTriggered) {
-          // Avoid spamming if triggered in last 45 seconds
-          const lastTrig = alert.lastTriggeredAt ? new Date(alert.lastTriggeredAt).getTime() : 0;
-          if (Date.now() - lastTrig > 45000) {
-            // Play synthesized audio chime
-            soundEngine.playAlertChime(alert.condition === "ABOVE" ? "high" : "low");
-
-            const newNotif: TriggeredAlertNotification = {
-              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-              alertId: alert.id,
-              symbol: alert.symbol,
-              condition: alert.condition,
-              targetPrice: alert.targetPrice,
-              actualPrice: currentPrice,
-              timestamp: new Date().toISOString(),
-              read: false,
-            };
-
-            // Add to active toast banner
-            setActiveToasts((prev) => [newNotif, ...prev.slice(0, 2)]);
-            setNotifications((prev) => [newNotif, ...prev.slice(0, 49)]);
-
-            // Dispatch browser notification if permitted
-            if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-              try {
-                new Notification(`Alerta ${alert.symbol}: $${currentPrice.toFixed(2)}`, {
-                  body: `${alert.symbol} ha cruzado tu umbral de $${alert.targetPrice}.`,
-                  icon: token.icon,
-                });
-              } catch (e) {
-                console.warn("Notification error", e);
-              }
-            }
-
-            // Update alert trigger count and timestamp
-            setAlerts((prev) =>
-              prev.map((a) =>
-                a.id === alert.id
-                  ? {
-                      ...a,
-                      triggeredCount: a.triggeredCount + 1,
-                      lastTriggeredAt: new Date().toISOString(),
-                    }
-                  : a
-              )
-            );
-          }
-        }
-      });
-    },
-    [alerts]
-  );
-
-  // Fetch prices: First try server /api/prices, then seamlessly fallback to direct multi-oracle client feed (essential for Netlify & static hosts)
+  // Fetch prices: First try server /api/prices, then seamlessly fallback to direct multi-oracle client feed
   const fetchPrices = useCallback(async (force = false) => {
     const startTime = Date.now();
     try {
@@ -396,7 +235,6 @@ function MainApp() {
             };
           }
         });
-        checkThresholdAlerts(updated);
         return updated;
       });
       return;
@@ -406,7 +244,7 @@ function MainApp() {
         const directData = await fetchLivePricesDirect(tokensRef.current);
         setLatencyMs(directData.latencyMs);
         setLastUpdated(directData.updatedAt);
-        setApiError(null); // Direct connection is active and healthy!
+        setApiError(null);
 
         setTokens((prev) => {
           const updated = { ...prev };
@@ -419,7 +257,6 @@ function MainApp() {
               };
             }
           });
-          checkThresholdAlerts(updated);
           return updated;
         });
         return;
@@ -428,7 +265,7 @@ function MainApp() {
         setApiError("Conexión con oráculos DEX lenta o intermitente");
       }
     }
-  }, [checkThresholdAlerts]);
+  }, []);
 
   // Fetch transactions feed (from backend if available, or keep local state)
   const fetchTransactions = useCallback(async () => {
@@ -503,7 +340,6 @@ function MainApp() {
       status: "CONFIRMED",
     };
 
-    // Stored immediately in state (auto-saved to localStorage)
     setTransactions((prev) => [createdTx, ...prev]);
 
     try {
@@ -528,10 +364,8 @@ function MainApp() {
         : "Simulada (Paper Trading)",
     };
 
-    // Add locally to state immediately (auto-saved to localStorage)
     setTransactions((prev) => [updatedTx, ...prev]);
 
-    // Persist to backend if available
     try {
       await fetch("/api/transactions", {
         method: "POST",
@@ -542,81 +376,6 @@ function MainApp() {
       // Local state preserved
     }
   };
-
-  // Alert Management Handlers
-  const handleAddAlert = (newAlert: Omit<AlertRule, "id" | "createdAt" | "triggeredCount">) => {
-    const rule: AlertRule = {
-      ...newAlert,
-      id: `alert_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      createdAt: new Date().toISOString(),
-      triggeredCount: 0,
-    };
-    setAlerts((prev) => [rule, ...prev]);
-  };
-
-  const handleToggleAlert = (id: string) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, isActive: !a.isActive } : a))
-    );
-  };
-
-  const handleDeleteAlert = (id: string) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-  };
-
-  const handleClearAllAlerts = () => {
-    setAlerts([]);
-    setActiveToasts([]);
-    try {
-      localStorage.setItem("jupiter_alerts", JSON.stringify([]));
-    } catch (e) {
-      console.warn("Could not save empty alerts to localStorage", e);
-    }
-  };
-
-  const handleRestoreDefaultAlerts = () => {
-    const defaults: AlertRule[] = [
-      {
-        id: `alert_sol_${Date.now()}`,
-        symbol: "SOL",
-        condition: "ABOVE",
-        targetPrice: Number(((tokens.SOL?.usdPrice || 100) * 1.05).toFixed(2)),
-        createdAt: new Date().toISOString(),
-        isActive: true,
-        notes: "Objetivo de resistencia",
-        triggeredCount: 0,
-      },
-      {
-        id: `alert_btc_${Date.now()}`,
-        symbol: "BTC",
-        condition: "ABOVE",
-        targetPrice: Number(((tokens.BTC?.usdPrice || 70000) * 1.05).toFixed(0)),
-        createdAt: new Date().toISOString(),
-        isActive: true,
-        notes: "Ruptura psicológica",
-        triggeredCount: 0,
-      },
-    ];
-    setAlerts(defaults);
-  };
-
-  const handleToggleAlertsEnabled = () => {
-    setAlertsEnabled((prev) => {
-      const next = !prev;
-      if (!next) {
-        setActiveToasts([]);
-      }
-      return next;
-    });
-  };
-
-  const handleOpenAlertForToken = (token: TokenPriceData) => {
-    setAlertModalSymbol(token.symbol);
-    setIsAlertModalOpen(true);
-  };
-
-  const activeAlertsCount = alertsEnabled ? alerts.filter((a) => a.isActive).length : 0;
-  const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
 
   const currentSelectedToken = tokens[selectedSymbol] || tokens.SOL;
 
@@ -631,13 +390,6 @@ function MainApp() {
         onManualRefresh={handleManualRefresh}
         isRefreshing={isRefreshing}
         lastUpdated={lastUpdated}
-        activeAlertsCount={activeAlertsCount}
-        unreadNotificationsCount={unreadNotificationsCount}
-        onOpenAlerts={() => {
-          setAlertModalSymbol(selectedSymbol);
-          setIsAlertModalOpen(true);
-        }}
-        alertsEnabled={alertsEnabled}
         soundEnabled={soundEnabled}
         onToggleSound={() => {
           const next = !soundEnabled;
@@ -671,7 +423,6 @@ function MainApp() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
             {(["BTC", "ETH", "SOL", "ZEC", "HYPE"] as CryptoSymbol[]).map((sym) => {
               const token = tokens[sym];
-              const tokenAlertCount = alerts.filter((a) => a.symbol === sym && a.isActive).length;
 
               return (
                 <TokenCard
@@ -679,15 +430,13 @@ function MainApp() {
                   token={token}
                   isSelected={selectedSymbol === sym}
                   onSelect={(t) => setSelectedSymbol(t.symbol)}
-                  onQuickAlert={handleOpenAlertForToken}
-                  activeAlertCount={tokenAlertCount}
                 />
               );
             })}
           </div>
         </section>
 
-        {/* Relative Performance Rotation Strategy Section */}
+        {/* 1. Modulo de Estrategia de Rotacion por Porcentaje */}
         <section>
           <RotationStrategyPanel
             tokens={tokens}
@@ -695,19 +444,11 @@ function MainApp() {
             transactions={transactions}
             walletConfig={walletConfig}
             onOpenWalletModal={() => setIsWalletModalOpen(true)}
+            onUpdateWalletConfig={setWalletConfig}
           />
         </section>
 
-        {/* Interactive Chart Section */}
-        <section>
-          <PriceChart
-            token={currentSelectedToken}
-            activeAlerts={alerts}
-            onOpenAlertModal={() => handleOpenAlertForToken(currentSelectedToken)}
-          />
-        </section>
-
-        {/* Transaction History & CSV Export Section */}
+        {/* 2. Historial de Operaciones DEBAJO DEL MODULO DE ESTRATEGIA */}
         <section>
           <TransactionHistory
             transactions={transactions}
@@ -715,6 +456,13 @@ function MainApp() {
             onAddTransaction={handleAddTransaction}
             isLoading={isLoadingTx}
             onRefreshTransactions={fetchTransactions}
+          />
+        </section>
+
+        {/* 3. Gráfica Interactiva */}
+        <section>
+          <PriceChart
+            token={currentSelectedToken}
           />
         </section>
       </main>
@@ -741,31 +489,6 @@ function MainApp() {
           </div>
         </div>
       </footer>
-
-      {/* Alert Manager Modal */}
-      <AlertManager
-        isOpen={isAlertModalOpen}
-        onClose={() => setIsAlertModalOpen(false)}
-        alerts={alerts}
-        tokens={tokens}
-        onAddAlert={handleAddAlert}
-        onToggleAlert={handleToggleAlert}
-        onDeleteAlert={handleDeleteAlert}
-        onDeleteAllAlerts={handleClearAllAlerts}
-        onRestoreDefaultAlerts={handleRestoreDefaultAlerts}
-        alertsEnabled={alertsEnabled}
-        onToggleAlertsEnabled={handleToggleAlertsEnabled}
-        notifications={notifications}
-        onClearNotifications={() => setNotifications([])}
-        onTestSound={() => soundEngine.playAlertChime("high")}
-        initialSymbol={alertModalSymbol}
-      />
-
-      {/* Active Toast Alerts Banner */}
-      <NotificationToast
-        notifications={activeToasts}
-        onDismiss={(id) => setActiveToasts((prev) => prev.filter((t) => t.id !== id))}
-      />
 
       {/* Wallet Solana Configuration Modal */}
       <WalletModal

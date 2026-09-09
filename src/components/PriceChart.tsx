@@ -6,30 +6,24 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  ReferenceLine,
   CartesianGrid,
 } from "recharts";
 import {
   Maximize2,
   TrendingUp,
   Clock,
-  Bell,
   ExternalLink,
   ShieldCheck,
 } from "lucide-react";
-import { TokenPriceData, AlertRule, TimeFrame } from "../types";
+import { TokenPriceData, TimeFrame } from "../types";
 import { useLanguage } from "../utils/i18n";
 
 interface PriceChartProps {
   token: TokenPriceData;
-  activeAlerts: AlertRule[];
-  onOpenAlertModal: () => void;
 }
 
 export const PriceChart: React.FC<PriceChartProps> = ({
   token,
-  activeAlerts,
-  onOpenAlertModal,
 }) => {
   const { t } = useLanguage();
   const [timeframe, setTimeframe] = useState<TimeFrame>("5M");
@@ -82,9 +76,6 @@ export const PriceChart: React.FC<PriceChartProps> = ({
     return 5;
   }
 
-  // Active alerts for this token
-  const tokenAlerts = activeAlerts.filter((a) => a.symbol === token.symbol && a.isActive);
-
   return (
     <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 lg:p-5 flex flex-col gap-4 backdrop-blur-sm">
       {/* Chart Top Header */}
@@ -134,15 +125,6 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             ))}
           </div>
 
-          <button
-            onClick={onOpenAlertModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition-colors"
-            title={t("manageAlerts")}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">{t("createAlertBtn")}</span>
-          </button>
-
           <a
             href={`https://jup.ag/swap/USDC-${token.mint}`}
             target="_blank"
@@ -177,14 +159,9 @@ export const PriceChart: React.FC<PriceChartProps> = ({
           </span>
         </div>
         <div>
-          <span className="text-slate-400 block text-[11px]">{t("activeAlertsHeader")}</span>
-          <span className="text-base font-bold text-amber-400 font-mono flex items-center gap-1">
-            {tokenAlerts.length}
-            {tokenAlerts.length > 0 && (
-              <span className="text-[10px] font-normal text-slate-400">
-                ({tokenAlerts.map((a) => `${a.condition === "ABOVE" ? ">" : "<"}$${a.targetPrice}`).join(", ")})
-              </span>
-            )}
+          <span className="text-slate-400 block text-[11px]">Variación (24h)</span>
+          <span className={`text-base font-bold font-mono ${token.priceChange24h >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {token.priceChange24h >= 0 ? "+" : ""}{token.priceChange24h.toFixed(2)}%
           </span>
         </div>
       </div>
@@ -242,23 +219,6 @@ export const PriceChart: React.FC<PriceChartProps> = ({
                 return null;
               }}
             />
-
-            {/* Render Threshold Alert Reference Lines */}
-            {tokenAlerts.map((alert) => (
-              <ReferenceLine
-                key={alert.id}
-                y={alert.targetPrice}
-                stroke="#f59e0b"
-                strokeDasharray="4 4"
-                strokeWidth={1.5}
-                label={{
-                  value: `${t("alert")}: ${alert.condition === "ABOVE" ? "≥" : "≤"} $${alert.targetPrice}`,
-                  fill: "#fbbf24",
-                  fontSize: 10,
-                  position: "insideTopRight",
-                }}
-              />
-            ))}
 
             <Area
               type="monotone"

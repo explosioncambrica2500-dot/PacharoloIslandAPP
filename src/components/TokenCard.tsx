@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowUpRight, ArrowDownRight, Bell, Copy, Check, TrendingUp } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Copy, Check, TrendingUp } from "lucide-react";
 import { TokenPriceData } from "../types";
 import { useLanguage } from "../utils/i18n";
 
@@ -7,16 +7,12 @@ interface TokenCardProps {
   token: TokenPriceData;
   isSelected: boolean;
   onSelect: (token: TokenPriceData) => void;
-  onQuickAlert: (token: TokenPriceData) => void;
-  activeAlertCount: number;
 }
 
 export const TokenCard: React.FC<TokenCardProps> = ({
   token,
   isSelected,
   onSelect,
-  onQuickAlert,
-  activeAlertCount,
 }) => {
   const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
@@ -75,17 +71,6 @@ export const TokenCard: React.FC<TokenCardProps> = ({
           : ""
       }`}
     >
-      {/* Active Alert Indicator Pill */}
-      {activeAlertCount > 0 && (
-        <span
-          title={`${activeAlertCount} ${t("activeAlertsForToken")} ${token.symbol}`}
-          className="absolute -top-2 -right-1 z-10 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center gap-1 shadow-sm"
-        >
-          <Bell className="w-2.5 h-2.5" />
-          {activeAlertCount}
-        </span>
-      )}
-
       {/* Header: Token Info */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2.5">
@@ -152,7 +137,7 @@ export const TokenCard: React.FC<TokenCardProps> = ({
         </div>
       </div>
 
-      {/* Footer: Mint Address and Quick Action */}
+      {/* Footer: Mint Address */}
       <div className="pt-2.5 border-t border-slate-800/70 flex items-center justify-between gap-2 text-xs">
         <button
           onClick={copyMint}
@@ -164,19 +149,9 @@ export const TokenCard: React.FC<TokenCardProps> = ({
             {token.mint.substring(0, 4)}...{token.mint.substring(token.mint.length - 4)}
           </span>
         </button>
-
-        <button
-          id={`quick-alert-${token.symbol.toLowerCase()}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onQuickAlert(token);
-          }}
-          className="flex items-center gap-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px]"
-          title={t("alert")}
-        >
-          <Bell className="w-3 h-3 text-amber-400" />
-          <span>{t("alert")}</span>
-        </button>
+        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+          Jupiter DEX
+        </span>
       </div>
     </div>
   );
