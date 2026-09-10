@@ -6,10 +6,9 @@ import {
   WalletConfig,
 } from "./types";
 import { Header } from "./components/Header";
-import { TokenCard } from "./components/TokenCard";
-import { PriceChart } from "./components/PriceChart";
 import { TransactionHistory } from "./components/TransactionHistory";
 import { RotationStrategyPanel } from "./components/RotationStrategyPanel";
+import { TopTradersLeaderboard } from "./components/TopTradersLeaderboard";
 import { WalletModal } from "./components/WalletModal";
 import { AndroidApkModal } from "./components/AndroidApkModal";
 import { LanguageProvider } from "./utils/i18n";
@@ -59,6 +58,30 @@ const DEFAULT_TOKENS: Record<CryptoSymbol, TokenPriceData> = {
     source: "Jupiter DEX API",
     icon: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
   },
+  JUP: {
+    symbol: "JUP",
+    name: "Jupiter",
+    mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    usdPrice: 0.225,
+    priceChange24h: -9.5,
+    liquidity: 18500000,
+    decimals: 6,
+    lastUpdated: new Date().toISOString(),
+    source: "Jupiter DEX API",
+    icon: "https://assets.coingecko.com/coins/images/34188/small/jup.png",
+  },
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    usdPrice: 1.0,
+    priceChange24h: 0.0,
+    liquidity: 500000000,
+    decimals: 6,
+    lastUpdated: new Date().toISOString(),
+    source: "Jupiter DEX API",
+    icon: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png",
+  },
   ZEC: {
     symbol: "ZEC",
     name: "Zcash",
@@ -71,19 +94,20 @@ const DEFAULT_TOKENS: Record<CryptoSymbol, TokenPriceData> = {
     source: "Jupiter DEX v3 API",
     icon: "https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png",
   },
-  HYPE: {
-    symbol: "HYPE",
-    name: "Hyperliquid",
-    mint: "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
-    usdPrice: 84.3,
-    priceChange24h: -0.92,
-    liquidity: 5310000,
-    decimals: 9,
-    lastUpdated: new Date().toISOString(),
-    source: "Jupiter DEX v3 API",
-    icon: "https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg?1729431300",
-  },
 };
+
+function getSessionClientId(): string {
+  try {
+    let id = sessionStorage.getItem("pacharolo_client_id");
+    if (!id) {
+      id = "client_" + Math.random().toString(36).substring(2, 10);
+      sessionStorage.setItem("pacharolo_client_id", id);
+    }
+    return id;
+  } catch {
+    return "client_default";
+  }
+}
 
 function MainApp() {
   const [tokens, setTokens] = useState<Record<CryptoSymbol, TokenPriceData>>(DEFAULT_TOKENS);
@@ -92,10 +116,10 @@ function MainApp() {
     tokensRef.current = tokens;
   }, [tokens]);
 
-  const [selectedSymbol, setSelectedSymbol] = useState<CryptoSymbol>("SOL");
   const [pollInterval, setPollInterval] = useState<number>(2000); // 2s by default
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number>(85);
+  const [activeUsersCount, setActiveUsersCount] = useState<number>(1);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -106,7 +130,7 @@ function MainApp() {
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isAndroidModalOpen, setIsAndroidModalOpen] = useState(false);
 
-  // Wallet configuration state (Paper vs Real) - synchronized with real Solana keypair
+  // Wallet configuration state (Real Solana Mode) - synchronized with real Solana keypair
   const [walletConfig, setWalletConfig] = useState<WalletConfig>(() => {
     const defaultKp = getOrCreateBotKeypair();
     try {
@@ -124,17 +148,19 @@ function MainApp() {
           parsed.isConnected = true;
           parsed.providerName = "Solana Sub-Wallet";
         }
+        parsed.mode = "REAL";
+        parsed.paperBalanceUsd = 0;
         return parsed;
       }
     } catch (e) {
       console.warn("Failed loading wallet config", e);
     }
     return {
-      mode: "PAPER",
+      mode: "REAL",
       address: defaultKp.publicKey,
       isConnected: true,
       providerName: "Solana Sub-Wallet",
-      paperBalanceUsd: 500,
+      paperBalanceUsd: 0,
     };
   });
 
@@ -163,11 +189,64 @@ function MainApp() {
     return () => window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdated);
   }, []);
 
-  // DEX Transactions feed initialized with localStorage fallback
+  // Precios base fijados en el momento de lanzamiento de ejecución del bot
+  const [baselinePrices, setBaselinePrices] = useState<Record<CryptoSymbol, number>>(() => {
+    try {
+      const saved = localStorage.getItem("pacharolo_baseline_prices");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      BTC: 78450.0,
+      ETH: 2471.5,
+      JUP: 0.225,
+      USDC: 1.0,
+      SOL: 102.85,
+      ZEC: 1129.5,
+    };
+  });
+
+  const [botExecutionLaunchedAt, setBotExecutionLaunchedAt] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("pacharolo_bot_launched_at");
+    } catch {
+      return null;
+    }
+  });
+
+  const handleResetBaseline = (newBaselines?: Record<CryptoSymbol, number>) => {
+    const updated: Record<CryptoSymbol, number> = newBaselines || {
+      BTC: tokensRef.current.BTC?.usdPrice || 78450.0,
+      ETH: tokensRef.current.ETH?.usdPrice || 2471.5,
+      JUP: tokensRef.current.JUP?.usdPrice || 0.225,
+      USDC: tokensRef.current.USDC?.usdPrice || 1.0,
+      SOL: tokensRef.current.SOL?.usdPrice || 102.85,
+      ZEC: tokensRef.current.ZEC?.usdPrice || 1129.5,
+    };
+    setBaselinePrices(updated);
+    const now = new Date().toISOString();
+    setBotExecutionLaunchedAt(now);
+    try {
+      localStorage.setItem("pacharolo_baseline_prices", JSON.stringify(updated));
+      localStorage.setItem("pacharolo_bot_launched_at", now);
+    } catch {}
+  };
+
+  // DEX Transactions feed initialized with localStorage fallback (strictly REAL on-chain swaps only)
   const [transactions, setTransactions] = useState<DexTransaction[]>(() => {
     try {
       const saved = localStorage.getItem("jupiter_transactions");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (tx: DexTransaction) =>
+              tx.isRealOnChain === true &&
+              !tx.wallet?.toLowerCase().includes("simulac") &&
+              !tx.dex?.toLowerCase().includes("simulac") &&
+              !(tx.type === "INITIAL_BUY" && (tx.totalUsd === 500 || tx.id?.includes("init_buy_")))
+          );
+        }
+      }
     } catch (e) {
       console.warn("Could not load transactions from localStorage", e);
     }
@@ -208,7 +287,10 @@ function MainApp() {
     const startTime = Date.now();
     try {
       const res = await fetch(`/api/prices${force ? "?force=true" : ""}`, {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "x-client-id": getSessionClientId(),
+        },
       });
 
       const contentType = res.headers.get("content-type") || "";
@@ -218,6 +300,10 @@ function MainApp() {
 
       const data = await res.json();
       if (!data.tokens) throw new Error("No tokens in API response");
+
+      if (typeof data.activeUsers === "number") {
+        setActiveUsersCount(data.activeUsers);
+      }
 
       const rtt = Date.now() - startTime;
       setLatencyMs(data.latencyMs || rtt);
@@ -271,12 +357,24 @@ function MainApp() {
   const fetchTransactions = useCallback(async () => {
     setIsLoadingTx(true);
     try {
-      const res = await fetch("/api/transactions?limit=60");
+      const walletParam = walletConfig.address ? `&wallet=${encodeURIComponent(walletConfig.address)}` : "";
+      const res = await fetch(`/api/transactions?limit=60${walletParam}`);
       const contentType = res.headers.get("content-type") || "";
       if (res.ok && contentType.includes("application/json")) {
         const data = await res.json();
         if (data.transactions && Array.isArray(data.transactions) && data.transactions.length > 0) {
-          setTransactions(data.transactions);
+          // Merge with user's local transactions, strictly retaining only real on-chain swaps
+          setTransactions((prev) => {
+            const userOnlyServerTx = data.transactions.filter((tx: DexTransaction) =>
+              tx.isRealOnChain === true &&
+              tx.isUserSwap !== false &&
+              (!walletConfig.address || !tx.userWallet || tx.userWallet === walletConfig.address)
+            );
+            if (userOnlyServerTx.length === 0) return prev;
+            const existingIds = new Set(prev.map((t) => t.id));
+            const newTxs = userOnlyServerTx.filter((t: DexTransaction) => !existingIds.has(t.id));
+            return [...newTxs, ...prev];
+          });
         }
       }
     } catch (e) {
@@ -284,7 +382,7 @@ function MainApp() {
     } finally {
       setIsLoadingTx(false);
     }
-  }, []);
+  }, [walletConfig.address]);
 
   // Polling loop for prices
   useEffect(() => {
@@ -315,13 +413,18 @@ function MainApp() {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // Add custom manual transaction
+  // Add custom manual transaction (Real only)
   const handleAddTransaction = async (newTx: {
     symbol: CryptoSymbol;
     type: "BUY" | "SELL";
     amount: number;
     priceUsd: number;
   }) => {
+    // Exclude simulation transactions from bot history
+    if (walletConfig.mode !== "REAL") {
+      return;
+    }
+
     const createdTx: DexTransaction = {
       id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
@@ -331,13 +434,14 @@ function MainApp() {
       priceUsd: newTx.priceUsd,
       totalUsd: Number((newTx.amount * newTx.priceUsd).toFixed(2)),
       txHash: `SOL${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
-      dex: "Jupiter DEX Router (Solana)",
+      dex: "Jupiter DEX Router (Solana Mainnet)",
       wallet: walletConfig.address
         ? `${walletConfig.address.substring(0, 4)}...${walletConfig.address.substring(walletConfig.address.length - 4)}`
-        : walletConfig.mode === "REAL"
-        ? "Wallet Solana Real"
-        : "Simulada (Paper Trading)",
+        : "Wallet Solana Real",
       status: "CONFIRMED",
+      isRealOnChain: true,
+      isUserSwap: true,
+      userWallet: walletConfig.address || "local_user",
     };
 
     setTransactions((prev) => [createdTx, ...prev]);
@@ -355,13 +459,22 @@ function MainApp() {
 
   // Handler for Rotation Strategy Buy & Swap executions
   const handleExecuteStrategySwap = async (tx: DexTransaction) => {
+    const isReal = Boolean(tx.isRealOnChain ?? true);
+
+    // Strictly exclude simulation swaps from bot operations history
+    if (!isReal) {
+      return;
+    }
+
     const updatedTx: DexTransaction = {
       ...tx,
-      wallet: walletConfig.address
-        ? `${walletConfig.address.substring(0, 4)}...${walletConfig.address.substring(walletConfig.address.length - 4)}`
-        : walletConfig.mode === "REAL"
-        ? "Wallet Solana Real"
-        : "Simulada (Paper Trading)",
+      isRealOnChain: true,
+      isUserSwap: true,
+      userWallet: walletConfig.address || "local_user",
+      wallet:
+        tx.wallet ||
+        `Sub-Wallet (${walletConfig.address ? walletConfig.address.substring(0, 4) + "..." + walletConfig.address.substring(walletConfig.address.length - 4) : "Solana"})`,
+      dex: tx.dex || "Jupiter DEX (Solana Mainnet)",
     };
 
     setTransactions((prev) => [updatedTx, ...prev]);
@@ -377,13 +490,12 @@ function MainApp() {
     }
   };
 
-  const currentSelectedToken = tokens[selectedSymbol] || tokens.SOL;
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
       {/* Top Navigation & Status Header */}
       <Header
         latencyMs={latencyMs}
+        activeUsersCount={activeUsersCount}
         isPolling={pollInterval > 0}
         pollInterval={pollInterval}
         setPollInterval={setPollInterval}
@@ -406,36 +518,6 @@ function MainApp() {
 
       {/* Main Dashboard Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
-        {/* Token Cards Grid: BTC, ETH, SOL, ZEC, HYPE */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-cyan-400" />
-              <h2 className="text-sm font-bold text-slate-200 tracking-wide uppercase">
-                Pares Principales Jupiter DEX
-              </h2>
-            </div>
-            <span className="text-xs text-slate-500 hidden sm:inline">
-              Haz clic en cualquier tarjeta para ver su gráfica interactiva
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-            {(["BTC", "ETH", "SOL", "ZEC", "HYPE"] as CryptoSymbol[]).map((sym) => {
-              const token = tokens[sym];
-
-              return (
-                <TokenCard
-                  key={sym}
-                  token={token}
-                  isSelected={selectedSymbol === sym}
-                  onSelect={(t) => setSelectedSymbol(t.symbol)}
-                />
-              );
-            })}
-          </div>
-        </section>
-
         {/* 1. Modulo de Estrategia de Rotacion por Porcentaje */}
         <section>
           <RotationStrategyPanel
@@ -445,13 +527,17 @@ function MainApp() {
             walletConfig={walletConfig}
             onOpenWalletModal={() => setIsWalletModalOpen(true)}
             onUpdateWalletConfig={setWalletConfig}
+            baselinePrices={baselinePrices}
+            botExecutionLaunchedAt={botExecutionLaunchedAt}
+            onResetBaseline={handleResetBaseline}
           />
         </section>
 
-        {/* 2. Historial de Operaciones DEBAJO DEL MODULO DE ESTRATEGIA */}
+        {/* 2. Historial de Operaciones del Bot (Solo swaps del propio usuario) */}
         <section>
           <TransactionHistory
             transactions={transactions}
+            currentUserWallet={walletConfig.address}
             tokens={tokens}
             onAddTransaction={handleAddTransaction}
             isLoading={isLoadingTx}
@@ -459,10 +545,12 @@ function MainApp() {
           />
         </section>
 
-        {/* 3. Gráfica Interactiva */}
+        {/* 3. Listado de Principales Usuarios con Mayor Volumen de Swaps (Excluye swaps en simulación) */}
         <section>
-          <PriceChart
-            token={currentSelectedToken}
+          <TopTradersLeaderboard
+            currentUserWallet={walletConfig.address}
+            userTransactions={transactions}
+            walletMode={walletConfig.mode}
           />
         </section>
       </main>
@@ -475,7 +563,7 @@ function MainApp() {
             <span>Jupiter DEX Core Solana Aggregator • Precios en tiempo real con latencia mínima</span>
           </div>
           <div className="flex items-center gap-4 text-slate-400">
-            <span>Tokens: BTC, ETH, SOL, ZEC, HYPE</span>
+            <span>Tokens: BTC, ETH, JUP, USDC, SOL, ZEC</span>
             <span>•</span>
             <a
               href="https://jup.ag"

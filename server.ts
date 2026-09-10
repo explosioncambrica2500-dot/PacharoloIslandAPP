@@ -37,6 +37,22 @@ const TOKENS: Record<string, TokenConfig> = {
     icon: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
     fallbackPrice: 2470.0,
   },
+  JUP: {
+    symbol: "JUP",
+    name: "Jupiter",
+    mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    decimals: 6,
+    icon: "https://assets.coingecko.com/coins/images/34188/small/jup.png",
+    fallbackPrice: 0.225,
+  },
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    decimals: 6,
+    icon: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png",
+    fallbackPrice: 1.0,
+  },
   ZEC: {
     symbol: "ZEC",
     name: "Zcash",
@@ -44,14 +60,6 @@ const TOKENS: Record<string, TokenConfig> = {
     decimals: 8,
     icon: "https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png",
     fallbackPrice: 1130.0,
-  },
-  HYPE: {
-    symbol: "HYPE",
-    name: "Hyperliquid",
-    mint: "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
-    decimals: 9,
-    icon: "https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg?1729431300",
-    fallbackPrice: 84.3,
   },
 };
 
@@ -91,6 +99,10 @@ export interface DexTransaction {
   toSymbol?: string;
   toAmount?: number;
   spreadPercent?: number;
+  isRealOnChain?: boolean;
+  isUserSwap?: boolean;
+  userWallet?: string;
+  feeTxHash?: string;
 }
 
 let cachedPrices: Record<string, PriceRecord> = {};
@@ -100,8 +112,9 @@ const priceHistoryBuffer: Record<string, PriceHistoryPoint[]> = {
   SOL: [],
   BTC: [],
   ETH: [],
+  JUP: [],
+  USDC: [],
   ZEC: [],
-  HYPE: [],
 };
 
 // Seed initial history
@@ -120,7 +133,30 @@ Object.keys(TOKENS).forEach((sym) => {
   priceHistoryBuffer[sym] = history;
 });
 
-// Active bot-executed transactions for Jupiter DEX history
+// Track real active user sessions (cleaned up every 30s)
+const activeSessions = new Map<string, number>();
+
+function trackActiveSession(req: express.Request): number {
+  const now = Date.now();
+  const clientId =
+    (req.headers["x-client-id"] as string) ||
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+    req.ip ||
+    "client_local";
+
+  activeSessions.set(clientId, now);
+
+  // Clean up sessions older than 30 seconds
+  for (const [id, lastSeen] of activeSessions.entries()) {
+    if (now - lastSeen > 30000) {
+      activeSessions.delete(id);
+    }
+  }
+
+  return Math.max(1, activeSessions.size);
+}
+
+// Active bot-executed transactions for Jupiter DEX history (strictly real on-chain)
 const recentTransactions: DexTransaction[] = [];
 
 // Fetch prices from Jupiter DEX API
@@ -129,8 +165,10 @@ async function fetchPricesFromJupiter(): Promise<{ prices: Record<string, PriceR
   const mints = [
     TOKENS.SOL.mint,
     TOKENS.BTC.mint,
+    TOKENS.ETH.mint,
+    TOKENS.JUP.mint,
+    TOKENS.USDC.mint,
     TOKENS.ZEC.mint,
-    TOKENS.HYPE.mint,
   ].join(",");
 
   const results: Record<string, PriceRecord> = { ...cachedPrices };
@@ -184,6 +222,42 @@ async function fetchPricesFromJupiter(): Promise<{ prices: Record<string, PriceR
         };
       }
 
+      // Map JUP
+      if (data[TOKENS.JUP.mint]) {
+        const item = data[TOKENS.JUP.mint];
+        results.JUP = {
+          symbol: "JUP",
+          name: TOKENS.JUP.name,
+          mint: TOKENS.JUP.mint,
+          usdPrice: item.usdPrice,
+          priceChange24h: item.priceChange24h ?? 0,
+          liquidity: item.liquidity ?? 0,
+          decimals: item.decimals ?? 6,
+          lastUpdated: new Date().toISOString(),
+          blockId: item.blockId,
+          source: "Jupiter DEX v3 API",
+          icon: TOKENS.JUP.icon,
+        };
+      }
+
+      // Map USDC
+      if (data[TOKENS.USDC.mint]) {
+        const item = data[TOKENS.USDC.mint];
+        results.USDC = {
+          symbol: "USDC",
+          name: TOKENS.USDC.name,
+          mint: TOKENS.USDC.mint,
+          usdPrice: item.usdPrice || 1.0,
+          priceChange24h: item.priceChange24h ?? 0,
+          liquidity: item.liquidity ?? 500000000,
+          decimals: item.decimals ?? 6,
+          lastUpdated: new Date().toISOString(),
+          blockId: item.blockId,
+          source: "Jupiter DEX v3 API",
+          icon: TOKENS.USDC.icon,
+        };
+      }
+
       // Map ZEC
       if (data[TOKENS.ZEC.mint]) {
         const item = data[TOKENS.ZEC.mint];
@@ -199,24 +273,6 @@ async function fetchPricesFromJupiter(): Promise<{ prices: Record<string, PriceR
           blockId: item.blockId,
           source: "Jupiter DEX v3 API",
           icon: TOKENS.ZEC.icon,
-        };
-      }
-
-      // Map HYPE
-      if (data[TOKENS.HYPE.mint]) {
-        const item = data[TOKENS.HYPE.mint];
-        results.HYPE = {
-          symbol: "HYPE",
-          name: TOKENS.HYPE.name,
-          mint: TOKENS.HYPE.mint,
-          usdPrice: item.usdPrice,
-          priceChange24h: item.priceChange24h ?? 0,
-          liquidity: item.liquidity ?? 0,
-          decimals: item.decimals ?? 9,
-          lastUpdated: new Date().toISOString(),
-          blockId: item.blockId,
-          source: "Jupiter DEX v3 API",
-          icon: TOKENS.HYPE.icon,
         };
       }
     }
@@ -263,16 +319,10 @@ async function fetchPricesFromJupiter(): Promise<{ prices: Record<string, PriceR
   const missingSyms = Object.keys(TOKENS).filter((s) => !results[s] || !results[s].usdPrice);
   if (missingSyms.length > 0) {
     try {
-      const [binanceRes, dexhypeRes] = await Promise.all([
-        fetch(
-          "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22SOLUSDT%22,%22BTCUSDT%22,%22ETHUSDT%22,%22ZECUSDT%22%5D",
-          { signal: AbortSignal.timeout(3000) }
-        ).catch(() => null),
-        fetch(
-          "https://api.dexscreener.com/latest/dex/tokens/98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
-          { signal: AbortSignal.timeout(3000) }
-        ).catch(() => null),
-      ]);
+      const binanceRes = await fetch(
+        "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22SOLUSDT%22,%22BTCUSDT%22,%22ETHUSDT%22,%22JUPUSDT%22,%22ZECUSDT%22%5D",
+        { signal: AbortSignal.timeout(3000) }
+      ).catch(() => null);
 
       if (binanceRes && binanceRes.ok) {
         const bData = (await binanceRes.json()) as any[];
@@ -294,25 +344,6 @@ async function fetchPricesFromJupiter(): Promise<{ prices: Record<string, PriceR
               };
             }
           }
-        }
-      }
-
-      if (dexhypeRes && dexhypeRes.ok && (!results.HYPE || !results.HYPE.usdPrice)) {
-        const dData = (await dexhypeRes.json()) as any;
-        const pair = (dData.pairs || []).find((p: any) => p.chainId === "solana") || (dData.pairs || [])[0];
-        if (pair && pair.priceUsd) {
-          results.HYPE = {
-            symbol: "HYPE",
-            name: TOKENS.HYPE.name,
-            mint: TOKENS.HYPE.mint,
-            usdPrice: parseFloat(pair.priceUsd),
-            priceChange24h: parseFloat(pair.priceChange?.h24 || 0),
-            liquidity: pair.liquidity?.usd || 4900000,
-            decimals: TOKENS.HYPE.decimals,
-            lastUpdated: new Date().toISOString(),
-            source: "Jupiter DEX / Meteora (Solana)",
-            icon: TOKENS.HYPE.icon,
-          };
         }
       }
     } catch (e) {
@@ -370,6 +401,7 @@ async function startServer() {
   // 1. API route: Live prices with low-latency caching
   app.get("/api/prices", async (req, res) => {
     try {
+      const activeUsers = trackActiveSession(req);
       const forceRefresh = req.query.force === "true";
       const now = Date.now();
       const cacheValid = !forceRefresh && Object.keys(cachedPrices).length > 0 && now - lastFetchTime < 1800;
@@ -382,6 +414,7 @@ async function startServer() {
           latencyMs: Math.max(1, Math.round(lastLatencyMs * 0.1)),
           updatedAt: new Date(lastFetchTime).toISOString(),
           tokens: cachedPrices,
+          activeUsers,
         });
       }
 
@@ -394,14 +427,17 @@ async function startServer() {
         latencyMs,
         updatedAt: new Date().toISOString(),
         tokens: prices,
+        activeUsers,
       });
     } catch (error: any) {
       console.error("Error in /api/prices:", error);
+      const activeUsers = trackActiveSession(req);
       return res.status(500).json({
         status: "error",
         message: "Error fetching Jupiter prices",
         error: error.message || "Unknown error",
         tokens: cachedPrices,
+        activeUsers,
       });
     }
   });
@@ -417,14 +453,23 @@ async function startServer() {
     });
   });
 
-  // 3. API route: Transactions feed & CSV exporter endpoint
+  // 3. API route: Transactions feed & CSV exporter endpoint (strictly real on-chain)
   app.get("/api/transactions", (req, res) => {
     const symbol = req.query.symbol as string;
+    const wallet = req.query.wallet as string;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    let filtered = recentTransactions;
+    // Strict on-chain filter: only real on-chain transactions are ever returned
+    let filtered = recentTransactions.filter((tx) => tx.isRealOnChain === true);
     if (symbol && symbol !== "ALL") {
-      filtered = recentTransactions.filter((tx) => tx.symbol.toUpperCase() === symbol.toUpperCase());
+      filtered = filtered.filter((tx) => tx.symbol.toUpperCase() === symbol.toUpperCase());
+    }
+    if (wallet) {
+      filtered = filtered.filter(
+        (tx) =>
+          tx.userWallet === wallet ||
+          tx.wallet.toLowerCase().includes(wallet.toLowerCase().substring(0, 4))
+      );
     }
 
     res.json({
@@ -433,11 +478,20 @@ async function startServer() {
     });
   });
 
-  // Record bot transactions (Initial Buys, Rotation Swaps)
+  // Record bot transactions (Only real on-chain swaps are stored)
   app.post("/api/transactions", (req, res) => {
     const body = req.body;
     if (!body || !body.symbol) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Exclude simulation swaps from the persistent bot operations history
+    const isRealOnChain = Boolean(body.isRealOnChain);
+    if (!isRealOnChain) {
+      return res.json({
+        status: "ignored",
+        message: "Simulation swaps excluded from transaction history",
+      });
     }
 
     const txHash = body.txHash || (
@@ -454,24 +508,290 @@ async function startServer() {
       priceUsd: Number(body.priceUsd),
       totalUsd: Number(body.totalUsd || (Number(body.amount) * Number(body.priceUsd)).toFixed(2)),
       txHash,
-      dex: body.dex || "Jupiter DEX Router (Solana)",
-      wallet: body.wallet || "Bot de Rotación",
+      dex: body.dex || "Jupiter DEX Router (Solana Mainnet)",
+      wallet: body.wallet || "Wallet Solana Real",
       status: body.status || "CONFIRMED",
       toSymbol: body.toSymbol,
       toAmount: body.toAmount ? Number(body.toAmount) : undefined,
       spreadPercent: body.spreadPercent !== undefined ? Number(body.spreadPercent) : undefined,
+      isRealOnChain: true,
+      isUserSwap: body.isUserSwap !== false,
+      userWallet: body.userWallet,
+      feeTxHash: body.feeTxHash,
     };
 
     recentTransactions.unshift(newTx);
     res.json({ status: "success", transaction: newTx });
   });
 
-  // 4. API health check
+  // 4. API route: Live status & rent exemption check for creator fee collector wallet
+  app.get("/api/wallet/creator-status/:address", async (req, res) => {
+    const address = req.params.address;
+    if (!address || address.length < 32) {
+      return res.status(400).json({ error: "Invalid Solana address" });
+    }
+
+    const solanaRpc = "https://api.mainnet-beta.solana.com";
+    try {
+      const [balRes, rentRes] = await Promise.all([
+        fetch(solanaRpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getBalance",
+            params: [address, { commitment: "confirmed" }],
+          }),
+          signal: AbortSignal.timeout(4000),
+        }).then((r) => r.json()).catch(() => null),
+        fetch(solanaRpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 2,
+            method: "getMinimumBalanceForRentExemption",
+            params: [0, { commitment: "confirmed" }],
+          }),
+          signal: AbortSignal.timeout(4000),
+        }).then((r) => r.json()).catch(() => null),
+      ]);
+
+      const lamports = Number(balRes?.result?.value || 0);
+      const minRentLamports = Number(rentRes?.result || 890880);
+      const balanceSol = lamports / 1000000000;
+      const isRentExempt = lamports >= minRentLamports;
+
+      res.json({
+        address,
+        balanceLamports: lamports,
+        balanceSol,
+        minRentLamports,
+        minRentSol: minRentLamports / 1000000000,
+        isRentExempt,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed checking creator status" });
+    }
+  });
+
+  // 4b. API route: Inspect empty token accounts with locked rent lamports
+  app.get("/api/wallet/empty-accounts/:address", async (req, res) => {
+    const address = req.params.address;
+    if (!address || address.length < 32) {
+      return res.status(400).json({ error: "Invalid Solana address" });
+    }
+
+    const solanaRpc = "https://api.mainnet-beta.solana.com";
+    try {
+      const resp = await fetch(solanaRpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getTokenAccountsByOwner",
+          params: [
+            address,
+            { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+            { encoding: "jsonParsed" },
+          ],
+        }),
+        signal: AbortSignal.timeout(5000),
+      }).then((r) => r.json());
+
+      const emptyAccounts: any[] = [];
+      let reclaimableLamports = 0;
+
+      for (const item of resp?.result?.value || []) {
+        const parsedInfo = item.account?.data?.parsed?.info;
+        const amount = parsedInfo?.tokenAmount?.amount;
+        if (amount === "0" || amount === 0) {
+          const lamports = Number(item.account?.lamports || 0);
+          emptyAccounts.push({
+            pubkey: item.pubkey,
+            mint: parsedInfo?.mint,
+            lamports,
+            sol: lamports / 1000000000,
+          });
+          reclaimableLamports += lamports;
+        }
+      }
+
+      res.json({
+        address,
+        emptyAccountsCount: emptyAccounts.length,
+        reclaimableLamports,
+        reclaimableSol: reclaimableLamports / 1000000000,
+        emptyAccounts,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed checking empty accounts" });
+    }
+  });
+
+  // 5. API route: Live wallet balance & SPL token holdings on Solana Mainnet
+  app.get("/api/wallet/holdings/:address", async (req, res) => {
+    const address = req.params.address;
+    if (!address || address.length < 32) {
+      return res.status(400).json({ error: "Invalid Solana address" });
+    }
+
+    const solanaRpc = "https://api.mainnet-beta.solana.com";
+    const solPrice = cachedPrices.SOL?.usdPrice || 101.14;
+    const btcPrice = cachedPrices.BTC?.usdPrice || 78500;
+    const ethPrice = cachedPrices.ETH?.usdPrice || 2470;
+    const jupPrice = cachedPrices.JUP?.usdPrice || 0.225;
+    const usdcPrice = cachedPrices.USDC?.usdPrice || 1.0;
+    const zecPrice = cachedPrices.ZEC?.usdPrice || 1130;
+
+    const holdings: Record<string, any> = {
+      SOL: { symbol: "SOL", balance: 0, rawAmount: "0", decimals: 9, usdValue: 0, mint: "So11111111111111111111111111111111111111112" },
+      BTC: { symbol: "BTC", balance: 0, rawAmount: "0", decimals: 8, usdValue: 0, mint: "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh" },
+      ETH: { symbol: "ETH", balance: 0, rawAmount: "0", decimals: 8, usdValue: 0, mint: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs" },
+      JUP: { symbol: "JUP", balance: 0, rawAmount: "0", decimals: 6, usdValue: 0, mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN" },
+      USDC: { symbol: "USDC", balance: 0, rawAmount: "0", decimals: 6, usdValue: 0, mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+      ZEC: { symbol: "ZEC", balance: 0, rawAmount: "0", decimals: 8, usdValue: 0, mint: "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS" },
+    };
+
+    try {
+      const [solRes, tokenRes] = await Promise.all([
+        fetch(solanaRpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getBalance",
+            params: [address, { commitment: "confirmed" }],
+          }),
+          signal: AbortSignal.timeout(4000),
+        }).then((r) => r.json()).catch(() => null),
+        fetch(solanaRpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 2,
+            method: "getTokenAccountsByOwner",
+            params: [
+              address,
+              { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+              { encoding: "jsonParsed" },
+            ],
+          }),
+          signal: AbortSignal.timeout(4000),
+        }).then((r) => r.json()).catch(() => null),
+      ]);
+
+      if (solRes?.result?.value !== undefined) {
+        const lamports = Number(solRes.result.value);
+        const solBal = lamports / 1000000000;
+        holdings.SOL.balance = solBal;
+        holdings.SOL.rawAmount = lamports.toString();
+        holdings.SOL.usdValue = Number((solBal * solPrice).toFixed(2));
+      }
+
+      if (Array.isArray(tokenRes?.result?.value)) {
+        for (const item of tokenRes.result.value) {
+          const info = item.account?.data?.parsed?.info;
+          if (!info) continue;
+          const mint = info.mint;
+          const uiAmount = Number(info.tokenAmount?.uiAmount || 0);
+          const rawAmount = String(info.tokenAmount?.amount || "0");
+          const decimals = Number(info.tokenAmount?.decimals || 8);
+
+          if (mint === "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS") {
+            holdings.ZEC.balance = uiAmount;
+            holdings.ZEC.rawAmount = rawAmount;
+            holdings.ZEC.decimals = decimals;
+            holdings.ZEC.usdValue = Number((uiAmount * zecPrice).toFixed(2));
+          } else if (
+            mint === "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh" ||
+            mint === "cbbtcf3aa214zXHbiAZQwf4122FmVbraDgTagqWphU7"
+          ) {
+            holdings.BTC.balance = uiAmount;
+            holdings.BTC.rawAmount = rawAmount;
+            holdings.BTC.decimals = decimals;
+            holdings.BTC.usdValue = Number((uiAmount * btcPrice).toFixed(2));
+          } else if (mint === "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs") {
+            holdings.ETH.balance = uiAmount;
+            holdings.ETH.rawAmount = rawAmount;
+            holdings.ETH.decimals = decimals;
+            holdings.ETH.usdValue = Number((uiAmount * ethPrice).toFixed(2));
+          } else if (mint === "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN") {
+            holdings.JUP.balance = uiAmount;
+            holdings.JUP.rawAmount = rawAmount;
+            holdings.JUP.decimals = decimals;
+            holdings.JUP.usdValue = Number((uiAmount * jupPrice).toFixed(2));
+          } else if (mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") {
+            holdings.USDC.balance = uiAmount;
+            holdings.USDC.rawAmount = rawAmount;
+            holdings.USDC.decimals = decimals;
+            holdings.USDC.usdValue = Number((uiAmount * usdcPrice).toFixed(2));
+          }
+        }
+      }
+
+      return res.json({
+        status: "success",
+        address,
+        solBalance: holdings.SOL.balance,
+        holdings,
+      });
+    } catch (err: any) {
+      console.warn("Error in /api/wallet/holdings:", err);
+      return res.status(500).json({ status: "error", message: err.message, holdings });
+    }
+  });
+
+  // 5. Proxy for Jupiter Quote to avoid any CORS or 429 rate limit issues in browser
+  app.get("/api/jupiter/quote", async (req, res) => {
+    try {
+      const queryString = new URLSearchParams(req.query as any).toString();
+      const response = await fetch(`https://public.jupiterapi.com/quote?${queryString}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(6000),
+      });
+      const data = await response.json();
+      return res.status(response.status).json(data);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Jupiter quote proxy error" });
+    }
+  });
+
+  // 6. Proxy for Jupiter Swap transaction build
+  app.post("/api/jupiter/swap", async (req, res) => {
+    try {
+      const payload = req.body || {};
+      // Sanitize quoteResponse: if platformFee exists without a feeAccount, Jupiter errors with 400 NOT_SUPPORTED
+      if (payload.quoteResponse && payload.quoteResponse.platformFee && !payload.feeAccount) {
+        payload.quoteResponse = {
+          ...payload.quoteResponse,
+          platformFee: null,
+        };
+      }
+
+      const response = await fetch("https://public.jupiterapi.com/swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await response.json();
+      return res.status(response.status).json(data);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Jupiter swap proxy error" });
+    }
+  });
+
+  // 7. API health check
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",
       dex: "Jupiter DEX (Solana)",
-      trackedTokens: ["BTC", "ETH", "SOL", "ZEC", "HYPE"],
+      trackedTokens: ["BTC", "ETH", "SOL", "ZEC"],
       uptime: process.uptime(),
     });
   });

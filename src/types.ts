@@ -1,4 +1,4 @@
-export type CryptoSymbol = 'SOL' | 'BTC' | 'ETH' | 'ZEC' | 'HYPE';
+export type CryptoSymbol = 'SOL' | 'BTC' | 'ETH' | 'JUP' | 'USDC' | 'ZEC';
 
 export interface TokenPriceData {
   symbol: CryptoSymbol;
@@ -57,13 +57,30 @@ export interface DexTransaction {
   toSymbol?: CryptoSymbol;
   toAmount?: number;
   spreadPercent?: number;
+  isRealOnChain?: boolean;
+  isUserSwap?: boolean;
+  userWallet?: string;
+  feeTxHash?: string;
 }
+
+export interface TokenHolding {
+  symbol: CryptoSymbol;
+  balance: number;
+  rawAmount: string;
+  decimals: number;
+  usdValue: number;
+  mint: string;
+}
+
+export type WalletHoldingsMap = Record<CryptoSymbol, TokenHolding>;
 
 export interface TokenRankingItem {
   symbol: CryptoSymbol;
   name: string;
   usdPrice: number;
-  changePercent: number;
+  changePercent24h: number;
+  changeSinceExecution: number;
+  baselinePrice: number;
   rank: number;
   isHighest: boolean;
   isLowest: boolean;
@@ -78,10 +95,13 @@ export interface RotationStrategyState {
   currentHoldingToken: CryptoSymbol;
   currentHoldingAmount: number;
   autoBotEnabled: boolean;
+  executionLaunchedAt?: string | null;
+  baselinePrices?: Partial<Record<CryptoSymbol, number>>;
   minSpreadThreshold: number;
   minNetGainThreshold: number; // Umbral mínimo de aumento neto tras costes (por defecto 0.5%)
+  scanFrequencyMs?: number; // Frecuencia de escaneo en ms (100ms, 250ms, 500ms, 1000ms)
   gasFeeUsd: number; // Coste de red Solana estimado en USD (ej. 0.015)
-  dexFeePercent: number; // Comisión Jupiter / DEX router (0.10%)
+  dexFeePercent: number; // Comisión de protocolo Jupiter DEX (0.00% por defecto, sin fee de protocolo)
   slippagePercent: number; // Slippage / Impacto de precio estimado (0.15%)
   lastSwapAt?: string;
   totalSwapsCount: number;
@@ -107,7 +127,7 @@ export interface BotSubWalletConfig {
 
 export interface PlatformFeeConfig {
   feeCollectorAddress: string;
-  platformFeeBps: number; // e.g. 20 bps = 0.20%
+  platformFeeBps: number; // e.g. 10 bps = 0.10% (tarifa transferida a tu wallet)
   totalFeesCollectedUsd: number;
   totalSwapsMonetized: number;
 }

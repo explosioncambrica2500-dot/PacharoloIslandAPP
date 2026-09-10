@@ -11,6 +11,7 @@ import {
   Smartphone,
   Globe,
   ChevronDown,
+  Users,
 } from "lucide-react";
 import { WalletConfig } from "../types";
 import { IslandCastleLogo } from "./IslandCastleLogo";
@@ -18,6 +19,7 @@ import { useLanguage, SUPPORTED_LANGUAGES, AppLanguage } from "../utils/i18n";
 
 interface HeaderProps {
   latencyMs: number;
+  activeUsersCount?: number;
   isPolling: boolean;
   pollInterval: number;
   setPollInterval: (interval: number) => void;
@@ -36,6 +38,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   latencyMs,
+  activeUsersCount = 1,
   isPolling,
   pollInterval,
   setPollInterval,
@@ -54,6 +57,9 @@ export const Header: React.FC<HeaderProps> = ({
   const { lang, setLang, t } = useLanguage();
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const langMenuRef = useRef<HTMLDivElement>(null);
+
+  // Real connected active users count (default 1 when only the current user is connected)
+  const effectiveActiveUsers = Math.max(1, activeUsersCount);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -146,11 +152,11 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Status & Latency Badge */}
+          {/* Status, Latency & Active Users Badge */}
           <div
             id="latency-badge"
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono"
-            title="Latencia estimada con Jupiter API"
+            title="Telemetría en tiempo real: Estado, Latencia y Usuarios activos utilizando el bot"
           >
             <span className="relative flex h-2 w-2">
               {isPolling && !apiError ? (
@@ -179,6 +185,17 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {latencyMs > 0 ? `${latencyMs}ms` : "--"}
             </span>
+            <span className="text-slate-600">|</span>
+            <div
+              className="flex items-center gap-1.5 text-cyan-400"
+              title={`${effectiveActiveUsers} ${effectiveActiveUsers === 1 ? t("activeUserSingular") : t("activeUsersPlural")}`}
+            >
+              <Users className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="font-bold text-cyan-300">{effectiveActiveUsers}</span>
+              <span className="text-slate-400 text-[11px] font-sans hidden sm:inline">
+                {effectiveActiveUsers === 1 ? t("activeUserSingular") : t("activeUsersPlural")}
+              </span>
+            </div>
           </div>
 
           {/* Refresh Frequency Selector */}
@@ -260,7 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : "bg-slate-800 text-slate-400"
               }`}
             >
-              {walletConfig.mode === "REAL" ? t("real") : t("demo")}
+              {t("real")}
             </span>
           </button>
 

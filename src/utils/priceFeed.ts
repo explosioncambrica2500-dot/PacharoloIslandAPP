@@ -25,19 +25,26 @@ export const TOKEN_CONFIG: Record<
     fallbackPrice: 2510.0,
     icon: "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
   },
+  JUP: {
+    name: "Jupiter",
+    mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    decimals: 6,
+    fallbackPrice: 0.225,
+    icon: "https://assets.coingecko.com/coins/images/34188/small/jup.png",
+  },
+  USDC: {
+    name: "USD Coin",
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    decimals: 6,
+    fallbackPrice: 1.0,
+    icon: "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png",
+  },
   ZEC: {
     name: "Zcash",
     mint: "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
     decimals: 8,
     fallbackPrice: 1260.0,
     icon: "https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png",
-  },
-  HYPE: {
-    name: "Hyperliquid",
-    mint: "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
-    decimals: 9,
-    fallbackPrice: 86.5,
-    icon: "https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg?1729431300",
   },
 };
 
@@ -58,18 +65,12 @@ export async function fetchLivePricesDirect(
   const startTime = Date.now();
   const parsedPrices: Partial<Record<CryptoSymbol, { price: number; change24h: number; liquidity?: number; source: string }>> = {};
 
-  // Method 1: Binance 24h Ticker + DexScreener Solana for HYPE
+  // Method 1: Binance 24h Ticker for SOL, BTC, ETH, JUP, ZEC
   try {
-    const [binanceRes, dexhypeRes] = await Promise.all([
-      fetch(
-        "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22SOLUSDT%22,%22BTCUSDT%22,%22ETHUSDT%22,%22ZECUSDT%22%5D",
-        { signal: AbortSignal.timeout(3500) }
-      ).catch(() => null),
-      fetch(
-        "https://api.dexscreener.com/latest/dex/tokens/98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
-        { signal: AbortSignal.timeout(3500) }
-      ).catch(() => null),
-    ]);
+    const binanceRes = await fetch(
+      "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22SOLUSDT%22,%22BTCUSDT%22,%22ETHUSDT%22,%22JUPUSDT%22,%22ZECUSDT%22%5D",
+      { signal: AbortSignal.timeout(3500) }
+    ).catch(() => null);
 
     if (binanceRes && binanceRes.ok) {
       const bData = await binanceRes.json();
@@ -86,34 +87,28 @@ export async function fetchLivePricesDirect(
         }
       }
     }
-
-    if (dexhypeRes && dexhypeRes.ok) {
-      const dData = await dexhypeRes.json();
-      const pair = (dData.pairs || []).find(
-        (p: any) => p.chainId === "solana" || p.quoteToken?.symbol === "USDC"
-      ) || (dData.pairs || [])[0];
-
-      if (pair && pair.priceUsd) {
-        parsedPrices.HYPE = {
-          price: parseFloat(pair.priceUsd),
-          change24h: parseFloat(pair.priceChange?.h24 || 0),
-          liquidity: pair.liquidity?.usd || 4900000,
-          source: "Jupiter DEX / Solana Meteora",
-        };
-      }
-    }
   } catch (err) {
     console.warn("Direct price feed method 1 failed, trying fallback:", err);
   }
 
+  // USDC is pegged to 1.00 USD
+  if (!parsedPrices.USDC) {
+    parsedPrices.USDC = {
+      price: 1.0,
+      change24h: 0.0,
+      liquidity: 500000000,
+      source: "Circle / Jupiter DEX",
+    };
+  }
+
   // Method 2: CoinGecko Fallback if any token is still missing
-  const symbols: CryptoSymbol[] = ["SOL", "BTC", "ETH", "ZEC", "HYPE"];
+  const symbols: CryptoSymbol[] = ["SOL", "BTC", "ETH", "JUP", "USDC", "ZEC"];
   const hasMissing = symbols.some((sym) => !parsedPrices[sym]);
 
   if (hasMissing) {
     try {
       const cgRes = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=solana,bitcoin,ethereum,zcash,hyperliquid&vs_currencies=usd&include_24hr_change=true",
+        "https://api.coingecko.com/api/v3/simple/price?ids=solana,bitcoin,ethereum,jupiter-exchange-solana,usd-coin,zcash&vs_currencies=usd&include_24hr_change=true",
         { signal: AbortSignal.timeout(3500) }
       );
       if (cgRes.ok) {
@@ -122,8 +117,9 @@ export async function fetchLivePricesDirect(
           SOL: "solana",
           BTC: "bitcoin",
           ETH: "ethereum",
+          JUP: "jupiter-exchange-solana",
+          USDC: "usd-coin",
           ZEC: "zcash",
-          HYPE: "hyperliquid",
         };
 
         for (const sym of symbols) {
@@ -190,9 +186,11 @@ export async function fetchLivePricesDirect(
         ? 35600000
         : sym === "ETH"
         ? 22250000
-        : sym === "ZEC"
-        ? 3540000
-        : 5310000;
+        : sym === "USDC"
+        ? 500000000
+        : sym === "JUP"
+        ? 18500000
+        : 3540000;
 
     resultTokens[sym] = {
       symbol: sym,

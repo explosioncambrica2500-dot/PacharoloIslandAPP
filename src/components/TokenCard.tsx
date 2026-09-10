@@ -7,12 +7,16 @@ interface TokenCardProps {
   token: TokenPriceData;
   isSelected: boolean;
   onSelect: (token: TokenPriceData) => void;
+  baselinePrice?: number;
+  botExecutionLaunchedAt?: string | null;
 }
 
 export const TokenCard: React.FC<TokenCardProps> = ({
   token,
   isSelected,
   onSelect,
+  baselinePrice,
+  botExecutionLaunchedAt,
 }) => {
   const { t } = useLanguage();
   const [copied, setCopied] = useState(false);
@@ -36,6 +40,11 @@ export const TokenCard: React.FC<TokenCardProps> = ({
   };
 
   const isPositive = token.priceChange24h >= 0;
+  const basePrice = baselinePrice && baselinePrice > 0 ? baselinePrice : token.usdPrice;
+  const changeSinceExecution = basePrice > 0
+    ? ((token.usdPrice - basePrice) / basePrice) * 100
+    : 0;
+  const isExecutionPositive = changeSinceExecution >= 0;
 
   // Formatting helpers
   const formatPrice = (p: number) => {
@@ -71,10 +80,10 @@ export const TokenCard: React.FC<TokenCardProps> = ({
           : ""
       }`}
     >
-      {/* Header: Token Info */}
-      <div className="flex items-center justify-between gap-3 mb-3">
+      {/* Header: Token Info & Dual Percentage Badges */}
+      <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-slate-800 p-1 flex items-center justify-center overflow-hidden border border-slate-700/60">
+          <div className="w-9 h-9 rounded-full bg-slate-800 p-1 flex items-center justify-center overflow-hidden border border-slate-700/60 flex-shrink-0">
             {token.icon ? (
               <img
                 src={token.icon}
@@ -96,22 +105,40 @@ export const TokenCard: React.FC<TokenCardProps> = ({
                 Solana
               </span>
             </div>
-            <p className="text-xs text-slate-400 truncate max-w-[120px]" title={token.name}>
+            <p className="text-xs text-slate-400 truncate max-w-[100px]" title={token.name}>
               {token.name}
             </p>
           </div>
         </div>
 
-        {/* 24h Change Pill */}
-        <div
-          className={`flex items-center gap-0.5 px-2 py-1 rounded-md text-xs font-semibold ${
-            isPositive
-              ? "bg-emerald-950/50 text-emerald-400 border border-emerald-800/40"
-              : "bg-rose-950/50 text-rose-400 border border-rose-800/40"
-          }`}
-        >
-          {isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-          <span>{Math.abs(token.priceChange24h).toFixed(2)}%</span>
+        {/* Dual Percentage Change: Desde Ejecución (Estrategia) & 24h */}
+        <div className="flex flex-col items-end gap-1">
+          {/* % Desde Ejecución del Bot */}
+          <div
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold font-mono border ${
+              isExecutionPositive
+                ? "bg-emerald-950/60 text-emerald-300 border-emerald-700/50"
+                : "bg-rose-950/60 text-rose-300 border-rose-700/50"
+            }`}
+            title={`Porcentaje de cambio desde el momento de lanzamiento del bot (Precio base: $${formatPrice(basePrice)})`}
+          >
+            <span className="text-[9px] text-slate-400 font-sans uppercase font-normal">Δ Ejec:</span>
+            <span>{changeSinceExecution >= 0 ? "+" : ""}{changeSinceExecution.toFixed(2)}%</span>
+          </div>
+
+          {/* % 24h */}
+          <div
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${
+              isPositive
+                ? "bg-slate-800/80 text-emerald-400"
+                : "bg-slate-800/80 text-rose-400"
+            }`}
+            title="Porcentaje de cambio en 24 horas"
+          >
+            <span className="text-slate-500 text-[9px] font-sans">24h:</span>
+            {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+            <span>{Math.abs(token.priceChange24h).toFixed(2)}%</span>
+          </div>
         </div>
       </div>
 
@@ -131,7 +158,13 @@ export const TokenCard: React.FC<TokenCardProps> = ({
             {formatPrice(token.usdPrice)}
           </span>
         </div>
-        <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+
+        {/* Precios Base de Ejecución y Liquidez */}
+        <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 pt-1 border-t border-slate-800/40">
+          <span>Base Ejec.:</span>
+          <span className="font-mono text-cyan-300 font-medium">${formatPrice(basePrice)}</span>
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-slate-400 mt-0.5">
           <span>{t("dexLiquidity")}</span>
           <span className="font-mono text-slate-300">{formatLiquidity(token.liquidity)}</span>
         </div>

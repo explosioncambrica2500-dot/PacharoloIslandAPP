@@ -20,7 +20,9 @@ import {
   Download,
   KeyRound,
   CheckCircle2,
+  Coins,
 } from "lucide-react";
+import { PublicKey } from "@solana/web3.js";
 import {
   getOrCreateBotKeypair,
   regenerateBotKeypair,
@@ -31,6 +33,12 @@ import {
   DEFAULT_FEE_COLLECTOR,
   BotKeypairData,
   WALLET_UPDATED_EVENT,
+  checkCreatorWalletStatus,
+  activateCreatorWalletOnChain,
+  CreatorWalletStatus,
+  getPendingCreatorFeeLamports,
+  checkEmptyTokenAccounts,
+  reclaimRentFromEmptyAccounts,
 } from "../utils/solanaBot";
 import { PlatformFeeConfig, WalletConfig } from "../types";
 import { useLanguage } from "../utils/i18n";
@@ -43,6 +51,8 @@ interface AutonomousBotWalletCardProps {
   onUpdateFeeConfig: (config: PlatformFeeConfig) => void;
   onKeypairLoaded?: (keypair: BotKeypairData) => void;
   onUpdateWalletConfig?: (config: WalletConfig) => void;
+  onBalanceUpdated?: (balanceSol: number) => void;
+  walletConfig?: WalletConfig;
 }
 
 export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = ({
@@ -53,6 +63,8 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
   onUpdateFeeConfig,
   onKeypairLoaded,
   onUpdateWalletConfig,
+  onBalanceUpdated,
+  walletConfig,
 }) => {
   const { t } = useLanguage();
   const [keypairData, setKeypairData] = useState<BotKeypairData>(() => getOrCreateBotKeypair());
@@ -77,13 +89,109 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
   const [isWithdrawing, setIsWithdrawing] = useState<boolean>(false);
   const [withdrawStatus, setWithdrawStatus] = useState<string | null>(null);
 
-  // Initial load
+  // Creator Fee Wallet On-Chain Status & Activation state
+  const [creatorStatus, setCreatorStatus] = useState<CreatorWalletStatus | null>(null);
+  const [isCheckingCreator, setIsCheckingCreator] = useState<boolean>(false);
+  const [isActivatingCreator, setIsActivatingCreator] = useState<boolean>(false);
+  const [creatorActivationError, setCreatorActivationError] = useState<string | null>(null);
+  const [creatorActivationSuccess, setCreatorActivationSuccess] = useState<string | null>(null);
+  const [isEditingFeeAddress, setIsEditingFeeAddress] = useState<boolean>(false);
+  const [customFeeAddressInput, setCustomFeeAddressInput] = useState<string>(platformFeeConfig.feeCollectorAddress);
+  const [feeAddressError, setFeeAddressError] = useState<string | null>(null);
+  const [lastFeeTxHash, setLastFeeTxHash] = useState<string | null>(null);
+
+  const refreshCreatorStatus = async (address = platformFeeConfig.feeCollectorAddress) => {
+    setIsCheckingCreator(true);
+    try {
+      const status = await checkCreatorWalletStatus(address);
+      setCreatorStatus(status);
+    } catch (err) {
+      console.warn("Could not check creator wallet status:", err);
+    } finally {
+      setIsCheckingCreator(false);
+    }
+  };
+
+  const handleActivateCreatorWallet = async () => {
+    if (isActivatingCreator) return;
+    setIsActivatingCreator(true);
+    setCreatorActivationError(null);
+    setCreatorActivationSuccess(null);
+    try {
+      const res = await activateCreatorWalletOnChain({
+        secretKeyBase58: keypairData.secretKeyBase58,
+        creatorWalletAddress: platformFeeConfig.feeCollectorAddress,
+      });
+      if (res.success && res.txHash) {
+        setCreatorActivationSuccess(`¡Wallet activada en Solana Mainnet! Tx: ${res.txHash.substring(0, 10)}...`);
+        setActionSuccessMessage("Wallet del Creador activada y exenta de renta en Solana.");
+        await Promise.all([
+          refreshBalance(keypairData.publicKey),
+          refreshCreatorStatus(platformFeeConfig.feeCollectorAddress),
+        ]);
+      } else {
+        setCreatorActivationError(res.error || "No se pudo activar la wallet.");
+      }
+    } catch (err: any) {
+      setCreatorActivationError(err?.message || "Error al activar la wallet en Solana.");
+    } finally {
+      setIsActivatingCreator(false);
+    }
+  };
+
+  const handleSaveCustomFeeAddress = () => {
+    const trimmed = customFeeAddressInput.trim();
+    if (!trimmed) {
+      setFeeAddressError("Ingresa una dirección válida.");
+      return;
+    }
+    try {
+      new PublicKey(trimmed);
+    } catch {
+      setFeeAddressError("Dirección de Solana inválida.");
+      return;
+    }
+
+    setFeeAddressError(null);
+    onUpdateFeeConfig({
+      ...platformFeeConfig,
+      feeCollectorAddress: trimmed,
+    });
+    setIsEditingFeeAddress(false);
+    setActionSuccessMessage("Dirección de cobro de comisiones actualizada.");
+    refreshCreatorStatus(trimmed);
+  };
+
+  const handleUpdateFeeCollector = (newAddress: string) => {
+    const trimmed = newAddress.trim();
+    if (!trimmed) return;
+    try {
+      new PublicKey(trimmed);
+    } catch {
+      return;
+    }
+    onUpdateFeeConfig({
+      ...platformFeeConfig,
+      feeCollectorAddress: trimmed,
+    });
+    refreshCreatorStatus(trimmed);
+  };
+
+  // Initial load & periodic balance polling
   useEffect(() => {
     const kp = getOrCreateBotKeypair();
     setKeypairData(kp);
     onKeypairLoaded(kp);
     refreshBalance(kp.publicKey);
-  }, []);
+    refreshCreatorStatus(platformFeeConfig.feeCollectorAddress);
+
+    // Auto-consultar balance cada 15 segundos para detectar depósitos automáticamente
+    const interval = setInterval(() => {
+      refreshBalance(kp.publicKey);
+      refreshCreatorStatus(platformFeeConfig.feeCollectorAddress);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [platformFeeConfig.feeCollectorAddress]);
 
   // Listen for wallet updates dispatched anywhere in the app
   useEffect(() => {
@@ -98,11 +206,61 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     return () => window.removeEventListener(WALLET_UPDATED_EVENT, handleWalletUpdate);
   }, []);
 
+  // Listen for creator fee updates dispatched after any swap
+  useEffect(() => {
+    const handleFeeUpdate = (e: any) => {
+      refreshCreatorStatus(platformFeeConfig.feeCollectorAddress);
+      if (e.detail?.feeTxHash) {
+        setLastFeeTxHash(e.detail.feeTxHash);
+      }
+    };
+    window.addEventListener("creator_fee_updated", handleFeeUpdate);
+    return () => window.removeEventListener("creator_fee_updated", handleFeeUpdate);
+  }, [platformFeeConfig.feeCollectorAddress]);
+
+  const [emptyAccountsData, setEmptyAccountsData] = useState<{ count: number; reclaimableSol: number } | null>(null);
+  const [isReclaimingRent, setIsReclaimingRent] = useState(false);
+  const [reclaimRentMessage, setReclaimRentMessage] = useState<string | null>(null);
+
+  const checkEmptyAccounts = async (address = keypairData.publicKey) => {
+    try {
+      const res = await checkEmptyTokenAccounts(address);
+      setEmptyAccountsData({ count: res.count, reclaimableSol: res.reclaimableSol });
+    } catch {}
+  };
+
+  const handleReclaimRent = async () => {
+    setIsReclaimingRent(true);
+    setReclaimRentMessage(null);
+    try {
+      const res = await reclaimRentFromEmptyAccounts(keypairData.secretKeyBase58);
+      if (res.success && res.reclaimedSol > 0) {
+        setReclaimRentMessage(`✓ ¡Recuperados +${res.reclaimedSol.toFixed(5)} SOL a la sub-wallet!`);
+        refreshBalance();
+        checkEmptyAccounts();
+        setTimeout(() => setReclaimRentMessage(null), 6000);
+      } else if (res.success) {
+        setReclaimRentMessage("No hay cuentas vacías pendientes por reclamar.");
+        setTimeout(() => setReclaimRentMessage(null), 3000);
+      } else {
+        setReclaimRentMessage(`Error: ${res.error || "No se pudo recuperar la renta"}`);
+      }
+    } catch (err: any) {
+      setReclaimRentMessage(`Error: ${err?.message || "Fallo inesperado"}`);
+    } finally {
+      setIsReclaimingRent(false);
+    }
+  };
+
   const refreshBalance = async (pubkey = keypairData.publicKey) => {
     setIsLoadingBalance(true);
     try {
       const bal = await fetchSolBalance(pubkey);
       setSolBalance(bal);
+      if (onBalanceUpdated) {
+        onBalanceUpdated(bal);
+      }
+      checkEmptyAccounts(pubkey);
     } catch (e) {
       console.warn("Could not query balance:", e);
     } finally {
@@ -131,11 +289,11 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     refreshBalance(newKp.publicKey);
     if (onUpdateWalletConfig) {
       onUpdateWalletConfig({
-        mode: isLiveOnChain ? "REAL" : "PAPER",
+        mode: "REAL",
         address: newKp.publicKey,
         providerName: "Solana Wallet",
         isConnected: true,
-        paperBalanceUsd: 500,
+        paperBalanceUsd: 0,
       });
     }
   };
@@ -156,11 +314,11 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
     refreshBalance(result.data.publicKey);
     if (onUpdateWalletConfig) {
       onUpdateWalletConfig({
-        mode: isLiveOnChain ? "REAL" : "PAPER",
+        mode: "REAL",
         address: result.data.publicKey,
         providerName: "Solana Wallet",
         isConnected: true,
-        paperBalanceUsd: 500,
+        paperBalanceUsd: 0,
       });
     }
   };
@@ -228,33 +386,53 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
           </div>
         </div>
 
-        {/* Live vs Paper Switch */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => onChangeLiveMode(false)}
-            className={`px-3 py-1.5 rounded text-xs font-semibold transition-all ${
-              !isLiveOnChain
-                ? "bg-cyan-500 text-slate-950 shadow font-bold"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            {t("paperMode")}
-          </button>
-          <button
-            type="button"
-            onClick={() => onChangeLiveMode(true)}
-            className={`px-3 py-1.5 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              isLiveOnChain
-                ? "bg-emerald-500 text-slate-950 shadow font-bold"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            {t("liveMode")}
-          </button>
+        {/* Live Mode Indicator */}
+        <div className="flex items-center gap-2 bg-emerald-950/70 border border-emerald-800/60 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-300 font-mono shadow-sm self-start sm:self-auto">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+          <span>{t("liveMode")} (Solana Mainnet)</span>
         </div>
       </div>
+
+      {/* Quick notice when creator fee wallet needs rent activation on Solana */}
+      {creatorStatus && !creatorStatus.isRentExempt && (
+        <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-700/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Wallet de comisiones del creador inactiva (0 SOL):</strong> Requiere rent-exemption para recibir micro-tarifas.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleActivateCreatorWallet}
+              disabled={isActivatingCreator || solBalance < 0.0009}
+              className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+              title={solBalance < 0.0009 ? "Se requiere al menos 0.0009 SOL en la sub-wallet" : "Activa la wallet con saldo de renta"}
+            >
+              {isActivatingCreator ? (
+                <>
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  <span>Activando...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3 h-3 fill-current" />
+                  <span>Activar ahora (0.00085 SOL)</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFeeConfig(true)}
+              className="text-amber-300 hover:text-white underline text-xs"
+            >
+              Configurar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Sub-Wallet Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -337,6 +515,46 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
               ≈ ${totalBalanceUsd.toFixed(2)} USD
             </span>
           </div>
+
+          {isLiveOnChain && solBalance < 0.005 && (
+            <div className="p-2 rounded bg-amber-950/40 border border-amber-600/40 text-[11px] text-amber-300 flex items-start gap-1.5 leading-snug">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <span>
+                <strong className="font-semibold text-amber-200">Modo Real activo en Solana Mainnet:</strong> Tu sub-wallet tiene {solBalance.toFixed(4)} SOL. Para que el bot ejecute swaps reales on-chain en Jupiter, deposita saldo y al menos ~0.005 SOL para tarifas de red.
+              </span>
+            </div>
+          )}
+
+          {emptyAccountsData && emptyAccountsData.count > 0 && (
+            <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-[11px] text-emerald-200 flex items-center justify-between gap-2 shadow-sm">
+              <div className="flex items-start gap-1.5 min-w-0">
+                <Coins className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-emerald-300">
+                    +{emptyAccountsData.reclaimableSol.toFixed(5)} SOL de renta recuperable
+                  </div>
+                  <div className="text-[10px] text-emerald-300/80 truncate">
+                    {emptyAccountsData.count} cuenta(s) de token vacía(s) de rotaciones previas.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleReclaimRent}
+                disabled={isReclaimingRent}
+                className="px-2.5 py-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded shadow transition-colors flex items-center gap-1 shrink-0"
+              >
+                {isReclaimingRent ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-current" />}
+                {isReclaimingRent ? "Recuperando..." : "Recuperar Gas"}
+              </button>
+            </div>
+          )}
+
+          {reclaimRentMessage && (
+            <div className="text-[11px] text-emerald-400 font-medium px-1">
+              {reclaimRentMessage}
+            </div>
+          )}
 
           <div className="pt-1 flex items-center gap-2">
             <button
@@ -475,7 +693,7 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
                   {t("feeSwapTitle")}:
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 font-mono font-bold">
-                  0.20% (20 bps)
+                  0.15% (15 bps)
                 </span>
               </div>
               <p className="text-slate-400 text-[11px] leading-relaxed">
@@ -492,6 +710,181 @@ export const AutonomousBotWalletCard: React.FC<AutonomousBotWalletCardProps> = (
             <span className="font-mono text-emerald-400 font-semibold">
               {platformFeeConfig.totalSwapsMonetized} {t("swapsMonetizedCount")}
             </span>
+          </div>
+
+          {/* Creator Wallet On-Chain Status & Activation Panel */}
+          <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 space-y-2.5 pt-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
+                Wallet Receptora de Comisiones (Creador):
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => refreshCreatorStatus()}
+                  className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1"
+                  title="Actualizar estado on-chain"
+                  disabled={isCheckingCreator}
+                >
+                  <RefreshCw className={`w-3 h-3 ${isCheckingCreator ? "animate-spin text-cyan-400" : ""}`} />
+                  <span>Refrescar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingFeeAddress(!isEditingFeeAddress);
+                    setCustomFeeAddressInput(platformFeeConfig.feeCollectorAddress);
+                    setFeeAddressError(null);
+                  }}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 underline"
+                >
+                  {isEditingFeeAddress ? "Cancelar" : "Cambiar dirección"}
+                </button>
+              </div>
+            </div>
+
+            {/* Address Display or Edit Form */}
+            {isEditingFeeAddress ? (
+              <div className="space-y-1.5 bg-slate-950 p-2 rounded border border-slate-700">
+                <label className="text-[10px] text-slate-400">Nueva dirección Solana (ej. tu wallet Phantom personal):</label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={customFeeAddressInput}
+                    onChange={(e) => setCustomFeeAddressInput(e.target.value)}
+                    placeholder="Dirección pública Base58..."
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveCustomFeeAddress}
+                    className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded text-xs"
+                  >
+                    Guardar
+                  </button>
+                </div>
+                {feeAddressError && <p className="text-rose-400 text-[10px]">{feeAddressError}</p>}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800 text-xs">
+                <span className="font-mono text-slate-300 truncate max-w-[220px] sm:max-w-none">
+                  {platformFeeConfig.feeCollectorAddress}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(platformFeeConfig.feeCollectorAddress, "pub")}
+                    className="text-slate-400 hover:text-white p-1"
+                    title="Copiar dirección"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <a
+                    href={`https://solscan.io/account/${platformFeeConfig.feeCollectorAddress}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-cyan-400 hover:text-cyan-300 p-1"
+                    title="Ver en Solscan"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Option to use Connected User Wallet as Fee Collector */}
+            {walletConfig?.address && walletConfig.address !== platformFeeConfig.feeCollectorAddress && (
+              <div className="flex items-center justify-between px-1 text-[11px]">
+                <span className="text-slate-400">¿Deseas recibir las tarifas en tu propia wallet?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleUpdateFeeCollector(walletConfig.address);
+                    refreshCreatorStatus(walletConfig.address);
+                    setActionSuccessMessage(`Dirección de comisiones actualizada a tu wallet conectada: ${walletConfig.address.slice(0, 4)}...${walletConfig.address.slice(-4)}`);
+                  }}
+                  className="text-cyan-400 hover:text-cyan-300 underline font-mono text-[10px] flex items-center gap-1"
+                >
+                  <span>Usar mi wallet ({walletConfig.address.slice(0, 4)}...{walletConfig.address.slice(-4)})</span>
+                </button>
+              </div>
+            )}
+
+            {/* Last On-Chain Fee Transaction Link */}
+            {lastFeeTxHash && (
+              <div className="flex items-center justify-between text-[11px] bg-amber-950/30 px-2.5 py-1.5 rounded border border-amber-800/40 text-amber-200">
+                <span className="flex items-center gap-1 font-medium">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  Última tarifa enviada on-chain:
+                </span>
+                <a
+                  href={`https://solscan.io/tx/${lastFeeTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-300 hover:text-amber-200 underline font-mono text-[10px] flex items-center gap-1"
+                >
+                  <span>{lastFeeTxHash.slice(0, 6)}...{lastFeeTxHash.slice(-4)}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              </div>
+            )}
+
+            {/* Status & Rent-Exemption Warning */}
+            {creatorStatus?.isRentExempt ? (
+              <div className="p-2.5 rounded bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    <strong>Cuenta Activa en Solana Mainnet</strong> (Saldo: {creatorStatus.balanceSol.toFixed(4)} SOL). Exenta de renta: las comisiones se acreditan instantáneamente en cada swap.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded bg-amber-950/50 border border-amber-800/70 text-amber-200 text-[11px] space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-amber-300">Cuenta Inactiva en Solana (0 SOL - Solscan "Closed Account")</strong>
+                    <p className="text-slate-300 text-[10px] mt-0.5 leading-relaxed">
+                      En Solana, las cuentas con 0 SOL no pueden recibir transferencias menores a <strong>0.00082 SOL</strong> (regla de rent-exemption). Por eso las micro-comisiones del bot daban error de renta en la red.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-900/50">
+                  <span className="text-[10px] text-amber-300/90">
+                    Comisiones acumuladas en cola: <strong>{(creatorStatus?.pendingFeeSol || 0).toFixed(6)} SOL</strong> (${(((creatorStatus?.pendingFeeSol || 0)) * (solPriceUsd || 105)).toFixed(3)} USD)
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleActivateCreatorWallet}
+                    disabled={isActivatingCreator || solBalance < 0.0009}
+                    className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors"
+                  >
+                    {isActivatingCreator ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Activando en Solana...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3 h-3 fill-current" />
+                        <span>Activar Wallet ahora (0.00085 SOL)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {creatorActivationSuccess && (
+                  <p className="text-emerald-400 text-[10px] font-semibold">{creatorActivationSuccess}</p>
+                )}
+                {creatorActivationError && (
+                  <p className="text-rose-400 text-[10px]">{creatorActivationError}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

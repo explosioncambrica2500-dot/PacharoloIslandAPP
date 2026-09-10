@@ -45,10 +45,9 @@ export const WalletModal: React.FC<WalletModalProps> = ({
   walletConfig,
   onUpdateWalletConfig,
 }) => {
-  const [activeTab, setActiveTab] = useState<"connect" | "keys" | "guide" | "python">("connect");
+  const [activeTab, setActiveTab] = useState<"connect" | "keys" | "guide">("connect");
   const [customAddress, setCustomAddress] = useState(walletConfig.address || "");
-  const [selectedMode, setSelectedMode] = useState<"PAPER" | "REAL">(walletConfig.mode);
-  const [paperBalance, setPaperBalance] = useState<number>(walletConfig.paperBalanceUsd || 500);
+  const [selectedMode] = useState<"REAL">("REAL");
   const [isConnecting, setIsConnecting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -63,8 +62,6 @@ export const WalletModal: React.FC<WalletModalProps> = ({
 
   useEffect(() => {
     setCustomAddress(walletConfig.address);
-    setSelectedMode(walletConfig.mode);
-    setPaperBalance(walletConfig.paperBalanceUsd || 500);
   }, [walletConfig, isOpen]);
 
   // Listen to global wallet changes
@@ -88,11 +85,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     setCreatedKeyData(newKp);
     setCustomAddress(newKp.publicKey);
     const updated: WalletConfig = {
-      mode: selectedMode,
+      mode: "REAL",
       address: newKp.publicKey,
       providerName: "Solana Keypair (Creada)",
       isConnected: true,
-      paperBalanceUsd: paperBalance,
+      paperBalanceUsd: 0,
     };
     onUpdateWalletConfig(updated);
     setStatusMessage(
@@ -111,11 +108,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     setCustomAddress(res.data.publicKey);
     setCreatedKeyData(res.data);
     const updated: WalletConfig = {
-      mode: selectedMode,
+      mode: "REAL",
       address: res.data.publicKey,
       providerName: "Wallet Importada (Self-Custody)",
       isConnected: true,
-      paperBalanceUsd: paperBalance,
+      paperBalanceUsd: 0,
     };
     onUpdateWalletConfig(updated);
     setImportKeyInput("");
@@ -129,11 +126,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
     setCustomAddress(currentBotKp.publicKey);
     setCreatedKeyData(currentBotKp);
     const updated: WalletConfig = {
-      mode: selectedMode,
+      mode: "REAL",
       address: currentBotKp.publicKey,
       providerName: "Sub-Wallet Bot",
       isConnected: true,
-      paperBalanceUsd: paperBalance,
+      paperBalanceUsd: 0,
     };
     onUpdateWalletConfig(updated);
     setStatusMessage(
@@ -167,7 +164,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({
           address: activeKey,
           providerName: "Jupiter DEX Wallet",
           isConnected: true,
-          paperBalanceUsd: paperBalance,
+          paperBalanceUsd: 0,
         };
         onUpdateWalletConfig(updated);
         setCustomAddress(activeKey);
@@ -184,11 +181,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
         "JUP_WALLET_ACTIVE";
 
       const updated: WalletConfig = {
-        mode: selectedMode,
+        mode: "REAL",
         address: pubKey,
         providerName: "Jupiter Wallet",
         isConnected: true,
-        paperBalanceUsd: paperBalance,
+        paperBalanceUsd: 0,
       };
       onUpdateWalletConfig(updated);
       setCustomAddress(pubKey);
@@ -208,11 +205,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       if (!provider || !provider.isPhantom) {
         const activeKey = getOrCreateBotKeypair().publicKey;
         const updated: WalletConfig = {
-          mode: selectedMode,
+          mode: "REAL",
           address: activeKey,
           providerName: "Phantom",
           isConnected: true,
-          paperBalanceUsd: paperBalance,
+          paperBalanceUsd: 0,
         };
         onUpdateWalletConfig(updated);
         setCustomAddress(activeKey);
@@ -224,11 +221,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       const pubKey = resp.publicKey.toString();
 
       const updated: WalletConfig = {
-        mode: selectedMode,
+        mode: "REAL",
         address: pubKey,
         providerName: "Phantom",
         isConnected: true,
-        paperBalanceUsd: paperBalance,
+        paperBalanceUsd: 0,
       };
       onUpdateWalletConfig(updated);
       setCustomAddress(pubKey);
@@ -248,11 +245,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       if (!provider) {
         const activeKey = getOrCreateBotKeypair().publicKey;
         const updated: WalletConfig = {
-          mode: selectedMode,
+          mode: "REAL",
           address: activeKey,
           providerName: "Solflare",
           isConnected: true,
-          paperBalanceUsd: paperBalance,
+          paperBalanceUsd: 0,
         };
         onUpdateWalletConfig(updated);
         setCustomAddress(activeKey);
@@ -264,11 +261,11 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       const pubKey = provider.publicKey.toString();
 
       const updated: WalletConfig = {
-        mode: selectedMode,
+        mode: "REAL",
         address: pubKey,
         providerName: "Solflare",
         isConnected: true,
-        paperBalanceUsd: paperBalance,
+        paperBalanceUsd: 0,
       };
       onUpdateWalletConfig(updated);
       setCustomAddress(pubKey);
@@ -283,14 +280,14 @@ export const WalletModal: React.FC<WalletModalProps> = ({
   const handleSaveManual = () => {
     const trimmed = customAddress.trim();
     const updated: WalletConfig = {
-      mode: selectedMode,
-      address: trimmed || "Simulated_Wallet_Treasury",
-      providerName: trimmed ? "Manual Solana Address" : "Simulación Local",
+      mode: "REAL",
+      address: trimmed,
+      providerName: trimmed ? "Manual Solana Address" : undefined,
       isConnected: !!trimmed,
-      paperBalanceUsd: Number(paperBalance) || 500,
+      paperBalanceUsd: 0,
     };
     onUpdateWalletConfig(updated);
-    setStatusMessage("Configuración de wallet guardada correctamente.");
+    setStatusMessage("Configuración de wallet Solana guardada correctamente.");
   };
 
   const handleDisconnect = () => {
@@ -302,15 +299,15 @@ export const WalletModal: React.FC<WalletModalProps> = ({
       }
     }
     const resetConfig: WalletConfig = {
-      mode: "PAPER",
+      mode: "REAL",
       address: "",
       providerName: undefined,
       isConnected: false,
-      paperBalanceUsd: 500,
+      paperBalanceUsd: 0,
     };
     onUpdateWalletConfig(resetConfig);
     setCustomAddress("");
-    setStatusMessage("Wallet desconectada. Operando en modo Simulación predeterminado.");
+    setStatusMessage("Wallet desconectada.");
   };
 
   const handleCopy = (text: string) => {
@@ -339,14 +336,14 @@ export const WalletModal: React.FC<WalletModalProps> = ({
                   className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border ${
                     walletConfig.isConnected
                       ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/40"
-                      : "bg-amber-950/60 text-amber-400 border-amber-800/40"
+                      : "bg-slate-800 text-slate-400 border-slate-700"
                   }`}
                 >
-                  {walletConfig.isConnected ? "Conectada" : "Modo Simulación"}
+                  {walletConfig.isConnected ? "Conectada (Mainnet)" : "Sin Conectar"}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Administra la conexión con Jupiter DEX (Solana) para swaps y arbitraje de rotación
+                Administra la conexión con Jupiter DEX (Solana) para swaps y arbitraje de rotación en tiempo real
               </p>
             </div>
           </div>
@@ -397,17 +394,6 @@ export const WalletModal: React.FC<WalletModalProps> = ({
             <Globe className="w-3.5 h-3.5" />
             <span>Guía Paso a Paso</span>
           </button>
-          <button
-            onClick={() => setActiveTab("python")}
-            className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === "python"
-                ? "border-cyan-400 text-cyan-300"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Terminal className="w-3.5 h-3.5" />
-            <span>Configuración en Python</span>
-          </button>
         </div>
 
         {/* Modal Body */}
@@ -457,52 +443,19 @@ export const WalletModal: React.FC<WalletModalProps> = ({
                 <label className="text-xs font-semibold text-slate-200 uppercase tracking-wider block">
                   Modo de Operación
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Paper trading mode */}
-                  <div
-                    onClick={() => setSelectedMode("PAPER")}
-                    className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                      selectedMode === "PAPER"
-                        ? "bg-cyan-950/40 border-cyan-500 shadow-md ring-1 ring-cyan-500/20"
-                        : "bg-slate-950/60 border-slate-800 hover:border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                        Simulación (Paper Trading)
-                      </span>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/40">
-                        Cero Riesgo
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Opera con un saldo virtual en USD. Prueba la compra de la moneda más barata y los swaps rotativos sin gastar SOL ni pagar tarifas de gas.
-                    </p>
+                <div className="p-3.5 rounded-xl border bg-cyan-950/40 border-cyan-500 shadow-md ring-1 ring-cyan-500/20">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-cyan-400" />
+                      Modo Real On-Chain Exclusivo (Solana Mainnet)
+                    </span>
+                    <span className="text-[10px] bg-cyan-950 text-cyan-300 font-mono px-2 py-0.5 rounded border border-cyan-800/40">
+                      Jupiter DEX Router
+                    </span>
                   </div>
-
-                  {/* Real on-chain mode */}
-                  <div
-                    onClick={() => setSelectedMode("REAL")}
-                    className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                      selectedMode === "REAL"
-                        ? "bg-cyan-950/40 border-cyan-500 shadow-md ring-1 ring-cyan-500/20"
-                        : "bg-slate-950/60 border-slate-800 hover:border-slate-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                        <Zap className="w-4 h-4 text-cyan-400" />
-                        Modo Real (Solana Mainnet)
-                      </span>
-                      <span className="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800/40">
-                        Jupiter Router
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Conecta tu wallet real (Phantom/Solflare). Las órdenes se enrutan a través del contrato inteligente de Jupiter DEX en la red Solana.
-                    </p>
-                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Todas las órdenes de compra y swaps rotativos se ejecutan de manera real sobre la red Solana Mainnet usando Jupiter DEX v6 API. El modo simulación ha sido deshabilitado para garantizar operativa 100% real.
+                  </p>
                 </div>
               </div>
 
@@ -683,33 +636,6 @@ export const WalletModal: React.FC<WalletModalProps> = ({
                   Tu clave pública se utilizará en los registros de transacciones y exportaciones CSV. <strong>Nunca</strong> introduzcas tu clave privada aquí.
                 </p>
               </div>
-
-              {/* Paper Balance Setting if in paper mode */}
-              {selectedMode === "PAPER" && (
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <DollarSign className="w-5 h-5 text-emerald-400" />
-                    <div>
-                      <span className="text-xs font-semibold text-white block">
-                        Capital Virtual Inicial (USD)
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        Monto simulado asignado para la primera compra
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 font-mono">$</span>
-                    <input
-                      type="number"
-                      value={paperBalance}
-                      onChange={(e) => setPaperBalance(Number(e.target.value))}
-                      className="w-24 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-right text-xs font-mono text-white focus:outline-none focus:border-cyan-500"
-                    />
-                    <span className="text-xs text-slate-400">USD</span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -722,7 +648,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({
                     Billetera Activa en la Aplicación
                   </span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/50">
-                    {walletConfig.mode === "REAL" ? "⚡ En Vivo (Mainnet)" : "🧪 Simulación"}
+                    ⚡ En Vivo (Solana Mainnet)
                   </span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-800">
@@ -1018,46 +944,6 @@ export const WalletModal: React.FC<WalletModalProps> = ({
                 <p className="text-slate-400">
                   Jupiter es el agregador de liquidez #1 de Solana. Busca la ruta más barata entre todos los DEXes (Raydium, Orca, Whirlpool, Meteora). Cuando ejecutas un swap en la aplicación, el contrato inteligente intercambia de inmediato tu token de origen por el destino con mínimo slippage.
                 </p>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "python" && (
-            <div className="space-y-4 text-xs leading-relaxed text-slate-300">
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
-                <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-yellow-400" />
-                  ¿Cómo opera el script en Python?
-                </h3>
-                <p className="text-slate-400">
-                  Por diseño y seguridad, el script <code>jupiter_dex_monitor.py</code> arranca por defecto en <strong>Modo Simulación / Paper Trading</strong>. Esto te permite monitorear cotizaciones en tiempo real y probar la estrategia con $500 USD virtuales <strong>sin necesidad de ingresar claves privadas ni arriesgar fondos</strong>.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <span className="font-semibold text-white block">
-                  Para habilitar transacciones on-chain automáticas en Python:
-                </span>
-                <p className="text-slate-400">
-                  Jupiter ofrece la API v6 de Swaps (<code>https://quote-api.jup.ag/v6/swap</code>). Solo requieres instalar la librería de Solana y configurar tu clave privada mediante una variable de entorno segura:
-                </p>
-                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-[11px] text-cyan-300 space-y-1">
-                  <div># 1. Configurar dirección de Jupiter Wallet o Solana:</div>
-                  <div className="text-white">$env:JUPITER_WALLET_ADDRESS="tu_direccion_publica_jupiter"</div>
-                  <div className="mt-2"># 2. Instalar SDK opcional para swaps on-chain automáticos:</div>
-                  <div className="text-white">pip install solders solana requests</div>
-                  <div className="mt-2"># 3. Variable de clave privada para modo Real (on-chain):</div>
-                  <div className="text-white">$env:SOLANA_PRIVATE_KEY="tu_private_key_base58"</div>
-                  <div className="mt-2"># O en Linux / Mac:</div>
-                  <div className="text-white">export JUPITER_WALLET_ADDRESS="tu_direccion_publica_jupiter"</div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 text-[11px] text-amber-200 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <span>
-                  <strong>Buenas prácticas de seguridad:</strong> Nunca compartas ni subas tu clave privada a repositorios públicos de GitHub. Mantén siempre una wallet dedicada exclusivamente para bots con un saldo controlado.
-                </span>
               </div>
             </div>
           )}

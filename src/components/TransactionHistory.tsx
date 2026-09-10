@@ -11,6 +11,7 @@ import {
   ArrowRight,
   TrendingDown,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { DexTransaction, CryptoSymbol, TokenPriceData } from "../types";
 import { exportTransactionsToCSV } from "../utils/csv";
@@ -18,6 +19,7 @@ import { useLanguage } from "../utils/i18n";
 
 interface TransactionHistoryProps {
   transactions: DexTransaction[];
+  currentUserWallet?: string;
   tokens: Record<CryptoSymbol, TokenPriceData>;
   onAddTransaction?: (tx: {
     symbol: CryptoSymbol;
@@ -31,6 +33,7 @@ interface TransactionHistoryProps {
 
 export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   transactions,
+  currentUserWallet,
   tokens,
   isLoading,
   onRefreshTransactions,
@@ -40,8 +43,37 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   const [filterType, setFilterType] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Only display transactions executed by the bot (INITIAL_BUY, ROTATION_SWAP, or bot BUY)
-  const filteredTransactions = transactions.filter((tx) => {
+  // STRICT FILTER: ONLY display REAL swaps executed on-chain (Simulation/Paper swaps are 100% excluded)
+  const realOnlyTransactions = transactions.filter((tx) => {
+    // 1. Must be strictly marked as real on-chain
+    if (tx.isRealOnChain !== true) return false;
+
+    // 2. Strict text check: exclude any simulation/paper labels
+    const walletStr = (tx.wallet || "").toLowerCase();
+    const dexStr = (tx.dex || "").toLowerCase();
+    if (
+      walletStr.includes("simulac") ||
+      walletStr.includes("paper") ||
+      dexStr.includes("simulac") ||
+      dexStr.includes("paper")
+    ) {
+      return false;
+    }
+
+    // 3. User swap check
+    if (tx.isUserSwap === false) return false;
+    if (
+      currentUserWallet &&
+      tx.userWallet &&
+      tx.userWallet !== currentUserWallet &&
+      !tx.wallet.includes(currentUserWallet.substring(0, 4))
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const filteredTransactions = realOnlyTransactions.filter((tx) => {
     // Filter token (either symbol or target symbol)
     if (filterSymbol !== "ALL") {
       if (tx.symbol !== filterSymbol && tx.toSymbol !== filterSymbol) return false;
@@ -72,8 +104,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
 
   const handleExport = () => {
     exportTransactionsToCSV(
-      filteredTransactions.length > 0 ? filteredTransactions : transactions,
-      `jupiter_operaciones_bot_${filterSymbol.toLowerCase()}`
+      filteredTransactions.length > 0 ? filteredTransactions : realOnlyTransactions,
+      `jupiter_operaciones_bot_real_${filterSymbol.toLowerCase()}`
     );
   };
 
@@ -98,7 +130,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                 <h3 className="text-lg font-bold text-white tracking-tight">
                   {t("txHistoryTitle")}
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/40 font-semibold uppercase">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/40 font-semibold uppercase flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
                   {t("txHistoryBadge")}
                 </span>
                 <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
@@ -117,7 +150,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
           <button
             id="export-csv-button"
             onClick={handleExport}
-            disabled={transactions.length === 0}
+            disabled={realOnlyTransactions.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold shadow-md shadow-emerald-950/40 transition-colors"
             title={t("exportCsv")}
           >
@@ -152,7 +185,6 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             <option value="BTC">BTC (Bitcoin)</option>
             <option value="ETH">ETH (Ethereum)</option>
             <option value="ZEC">ZEC (Zcash)</option>
-            <option value="HYPE">HYPE (Hyperliquid)</option>
           </select>
         </div>
 
@@ -185,10 +217,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
       </div>
 
       {/* Transactions Table Container */}
-      {transactions.length === 0 ? (
+      {realOnlyTransactions.length === 0 ? (
         <div className="p-8 border border-dashed border-slate-800 rounded-xl bg-slate-950/40 text-center flex flex-col items-center justify-center gap-3">
-          <div className="p-3 rounded-full bg-slate-800/80 border border-slate-700 text-cyan-400">
-            <Bot className="w-8 h-8 animate-pulse" />
+          <div className="p-3 rounded-full bg-emerald-950/60 border border-emerald-800/70 text-emerald-400">
+            <ShieldCheck className="w-8 h-8" />
           </div>
           <div>
             <h4 className="text-sm font-bold text-white mb-1">
@@ -294,20 +326,41 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                       ${tx.totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-2.5 px-3 text-slate-400 text-[11px] font-sans">
-                      <span className="text-slate-200 block font-medium">{tx.wallet}</span>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider font-mono bg-emerald-950 text-emerald-300 border border-emerald-700/60">
+                          ⚡ Real Mainnet
+                        </span>
+                        <span className="text-slate-200 font-medium truncate max-w-[130px] font-mono">
+                          {tx.wallet}
+                        </span>
+                      </div>
                       <span className="text-slate-500 block text-[10px]">{tx.dex}</span>
                     </td>
                     <td className="py-2.5 px-3 text-center">
-                      <a
-                        href={`https://solscan.io/tx/${tx.txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 underline font-mono"
-                        title="Solscan"
-                      >
-                        <span>{tx.txHash.slice(0, 4)}...{tx.txHash.slice(-3)}</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
+                      <div className="flex flex-col items-center gap-1">
+                        <a
+                          href={`https://solscan.io/tx/${tx.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 underline font-mono"
+                          title="Ver Swap en Solscan"
+                        >
+                          <span>Swap: {tx.txHash.slice(0, 4)}...{tx.txHash.slice(-3)}</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                        {tx.feeTxHash && (
+                          <a
+                            href={`https://solscan.io/tx/${tx.feeTxHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 underline font-mono bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-800/50"
+                            title="Ver transferencia de tarifa a wallet de creador en Solscan"
+                          >
+                            <span>Fee: {tx.feeTxHash.slice(0, 4)}...{tx.feeTxHash.slice(-3)}</span>
+                            <ExternalLink className="w-2 h-2" />
+                          </a>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
